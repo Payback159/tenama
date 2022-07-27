@@ -1,0 +1,144 @@
+openapi: 3.0.1
+info:
+  contact:
+    url: https://github.com/Payback159/tempido/issues/new
+  description: "Tempido provides a simple REST API to enable non-cluster-admins to\
+    \ create temporary namespaces. Tempido takes care of the creation, management\
+    \ and cleanup of the temporary namespaces."
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Tempido
+  version: 1.0.0
+servers:
+- url: /
+tags:
+- description: Everything about your temporarily namespaces
+  externalDocs:
+    description: Find out more
+    url: https://github.com/Payback159/tempido
+  name: Namespaces
+paths:
+  /version:
+    get:
+      operationId: getVersion
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+          description: successful operation
+      summary: Outputs the version of Tempido
+  /namespace:
+    post:
+      operationId: createNamespace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Namespace'
+        description: Namespace object that needs to be added to the cluster
+        required: true
+      responses:
+        "405":
+          description: Invalid input
+      summary: Create a new namespace
+      tags:
+      - namespace
+      x-codegen-request-body-name: body
+  /namespace/{namespace}:
+    delete:
+      operationId: deleteNamespace
+      parameters:
+      - description: Namespace to delete
+        explode: false
+        in: path
+        name: namespace
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "400":
+          content: {}
+          description: Invalid Namespace supplied
+        "404":
+          content: {}
+          description: Namespace not found
+      security:
+      - namespace_auth:
+        - write:namespaces
+        - read:namespaces
+      summary: Deletes a namespace
+      tags:
+      - namespace
+    get:
+      description: Returns a single namespace
+      operationId: getNamespaceByName
+      parameters:
+      - description: name of namespace to return
+        explode: false
+        in: path
+        name: namespace
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+          description: successful operation
+        "400":
+          content: {}
+          description: Invalid namespace supplied
+        "404":
+          content: {}
+          description: Namespace not found
+      summary: Find namespace by name
+      tags:
+      - namespace
+components:
+  schemas:
+    Namespace:
+      example:
+        duration: duration
+        infix: infix
+        suffix: suffix
+        users: users
+      properties:
+        infix:
+          type: string
+        suffix:
+          type: string
+        duration:
+          description: How long should the namespace be preserved until it becomes
+            obsolete and is automatically cleaned up.
+          type: string
+        users:
+          description: A list of users to be authorized as editors in this namespace.
+          type: string
+      type: object
+      xml:
+        name: Namespace
+    Version:
+      example:
+        version: version
+      properties:
+        version:
+          type: string
+      type: object
+      xml:
+        name: Version
+  securitySchemes:
+    namespace_auth:
+      flows:
+        implicit:
+          authorizationUrl: http://namespacestore.swagger.io/oauth/dialog
+          scopes:
+            write:namespaces: modify namespaces in your account
+            read:namespaces: read your namespaces
+      type: oauth2
