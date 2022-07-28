@@ -32,6 +32,8 @@ paths:
       summary: Outputs the version of Tempido
   /namespace:
     post:
+      security:
+        - basicAuth: []
       operationId: createNamespace
       requestBody:
         content:
@@ -41,6 +43,8 @@ paths:
         description: Namespace object that needs to be added to the cluster
         required: true
       responses:
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
         "405":
           description: Invalid input
       summary: Create a new namespace
@@ -49,6 +53,8 @@ paths:
       x-codegen-request-body-name: body
   /namespace/{namespace}:
     delete:
+      security:
+        - basicAuth: []
       operationId: deleteNamespace
       parameters:
       - description: Namespace to delete
@@ -63,17 +69,17 @@ paths:
         "400":
           content: {}
           description: Invalid Namespace supplied
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
         "404":
           content: {}
           description: Namespace not found
-      security:
-      - namespace_auth:
-        - write:namespaces
-        - read:namespaces
       summary: Deletes a namespace
       tags:
       - namespace
     get:
+      security:
+        - basicAuth: []
       description: Returns a single namespace
       operationId: getNamespaceByName
       parameters:
@@ -95,6 +101,8 @@ paths:
         "400":
           content: {}
           description: Invalid namespace supplied
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
         "404":
           content: {}
           description: Namespace not found
@@ -134,11 +142,13 @@ components:
       xml:
         name: Version
   securitySchemes:
-    namespace_auth:
-      flows:
-        implicit:
-          authorizationUrl: http://namespacestore.swagger.io/oauth/dialog
-          scopes:
-            write:namespaces: modify namespaces in your account
-            read:namespaces: read your namespaces
-      type: oauth2
+    basicAuth:
+      type: http
+      scheme: basic
+  responses:
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      headers:
+        WWW_Authenticate:
+          schema:
+            type: string
