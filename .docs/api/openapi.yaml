@@ -128,7 +128,9 @@ components:
           type: string
         users:
           description: A list of users to be authorized as editors in this namespace.
-          type: string
+          type: array
+          items:
+            type: string
       type: object
       xml:
         name: Namespace
