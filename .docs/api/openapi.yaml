@@ -13,10 +13,11 @@ info:
 servers:
 - url: /
 tags:
-- description: Everything about your temporarily namespaces
-  externalDocs:
+- externalDocs:
     description: Find out more
     url: https://github.com/Payback159/tempido
+  name: Documentation
+- description: Everything about your temporarily namespaces
   name: Namespaces
 paths:
   /version:
@@ -25,7 +26,9 @@ paths:
       responses:
         "200":
           description: successful operation
-      summary: Outputs the version of Tempido and SwaggerUI
+      summary: Outputs the openAPI specification
+      tags:
+      - Documentation
   /namespace:
     post:
       operationId: createNamespace
@@ -51,7 +54,7 @@ paths:
       - basicAuth: []
       summary: Create a new namespace
       tags:
-      - namespace
+      - Namespaces
       x-codegen-request-body-name: body
   /namespace/{namespace}:
     delete:
@@ -84,7 +87,7 @@ paths:
       - basicAuth: []
       summary: Deletes a namespace
       tags:
-      - namespace
+      - Namespaces
     get:
       description: Returns a single namespace
       operationId: getNamespaceByName
@@ -122,7 +125,7 @@ paths:
       - basicAuth: []
       summary: Find namespace by name
       tags:
-      - namespace
+      - Namespaces
 components:
   responses:
     UnauthorizedError:

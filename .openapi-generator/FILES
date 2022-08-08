@@ -5,6 +5,5 @@ go.mod
 handlers/api_default.go
 handlers/api_namespace.go
 handlers/container.go
-main.go
 models/hello-world.go
 models/model_namespace.go
