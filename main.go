@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
 	"flag"
 	"fmt"
 	"os"
@@ -40,15 +39,6 @@ func newConfig(configPath string) (*models.Config, error) {
 	}
 	defer file.Close()
 	return config, nil
-}
-
-func basicAuthValidator(username, password string, c echo.Context) (bool, error) {
-	// Be careful to use constant time comparison to prevent timing attacks
-	if subtle.ConstantTimeCompare([]byte(username), []byte("admin")) == 1 &&
-		subtle.ConstantTimeCompare([]byte(password), []byte("admin")) == 1 {
-		return true, nil
-	}
-	return false, nil
 }
 
 func cleanupNamespaces(clientset *kubernetes.Clientset, pre string) {
@@ -153,24 +143,27 @@ func main() {
 		log.Fatalf("Could not create k8s client: %s", err)
 	}
 
-	// cleanup old ns
-	go cleanupNamespaces(clientset, cfg.Namespace.Prefix)
-
 	// create new echo instance and register authenticated group
 	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = false
 	ag := e.Group("/namespace")
 
 	//todo: handle the error!
-	c, _ := handlers.NewContainer()
+	c, err := handlers.NewContainer()
+	if err != nil {
+		log.Fatalf("Container for the handler could not be initialized: %s", err)
+	}
+	c.SetBasicAuthUserList(cfg)
 
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	ag.Use(middleware.BasicAuth(basicAuthValidator))
+	ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
 
 	// GetVersion - Outputs the version of tenama
-	e.Static("/docs", "docs/swagger/")
-	e.Static("/", "docs/swagger/")
+	e.Static("/docs", ".docs/swagger/")
+	e.Static("/", ".docs/swagger/")
 
 	// CreateNamespace - Create a new namespace
 	ag.POST("/namespace", c.CreateNamespace)
@@ -183,4 +176,7 @@ func main() {
 
 	// Start server
 	e.Logger.Fatal(e.Start(":8080"))
+
+	// start namespace cleanup logic
+	go cleanupNamespaces(clientset, cfg.Namespace.Prefix)
 }
