@@ -1,6 +1,6 @@
 package handlers
 import (
-    "github.com/Payback159/tempido/models"
+    "github.com/Payback159/tenama/models"
     "github.com/labstack/echo/v4"
     "net/http"
 )

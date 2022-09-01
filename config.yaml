@@ -1,7 +1,9 @@
+logLevel: INFO
+cleanupInterval: 10m
 namespace:
-  prefix: "tempido-"
-  suffix: "" # if not set tempido will use a random string instead
-  duration: "7d"
+  prefix: "tenama"
+  suffix: "" # if not set tenama will use a random string instead
+  duration: "168h" #7 days
   resources:
     requests:
       cpu: "1000m"
@@ -10,3 +12,9 @@ namespace:
     limits:
       cpu: "1000m"
       memory: "1Gi"
+
+basicAuth:
+  - username: user1
+    password: user1
+  - username: user2
+    password: user2
