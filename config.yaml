@@ -1,0 +1,12 @@
+namespace:
+  prefix: "tempido-"
+  suffix: "" # if not set tempido will use a random string instead
+  duration: "7d"
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "1Gi"
+      storage: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
