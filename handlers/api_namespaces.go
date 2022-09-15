@@ -18,6 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	//import kubernetes clientcmdapi
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const role = "edit"
@@ -44,18 +47,8 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
 		createNamespace(c.clientset, nsSpec, namespaceList)
-		rbSpec, _ := c.craftRolebindingSpecification(nsSpec.ObjectMeta.Name, ns.Users)
-		_, err := createRolebinding(c.clientset, rbSpec, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating rolebinding: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating rolebinding",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
 		quotaSpec := c.craftNamespaceQuotaSpecification(nsSpec.ObjectMeta.Name)
-		_, err = createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
+		_, err := createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
 		if err != nil {
 			log.Errorf("Error creating namespace quota: %s", err)
 			errorResponse := models.Response{
@@ -74,8 +67,18 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			}
 			return ctx.JSON(http.StatusInternalServerError, errorResponse)
 		}
+		rbSpec, _ := c.craftRolebindingSpecification(nsSpec.ObjectMeta.Name, ns.Users, serviceAccountSpec.ObjectMeta.Name)
+		_, err = createRolebinding(c.clientset, rbSpec, nsSpec.ObjectMeta.Name)
+		if err != nil {
+			log.Errorf("Error creating rolebinding: %s", err)
+			errorResponse := models.Response{
+				Message:   "Error creating rolebinding",
+				Namespace: nsSpec.ObjectMeta.Name,
+			}
+			return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		}
 		serviceAccountTokenSecret := c.craftServiceAccountTokenSecretSpecificationn(nsSpec.ObjectMeta.Name)
-		accessToken, err := c.createSecretForServiceAccountToken(c.clientset, serviceAccountTokenSecret, nsSpec.ObjectMeta.Name)
+		secret, err := c.createSecretForServiceAccountToken(c.clientset, serviceAccountTokenSecret, nsSpec.ObjectMeta.Name)
 		if err != nil {
 			log.Errorf("Error creating service account token secret: %s", err)
 			errorResponse := models.Response{
@@ -85,13 +88,17 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			return ctx.JSON(http.StatusInternalServerError, errorResponse)
 		}
 
-		successResponse := models.Response{
-			Message:     "Namespace successfully created",
-			Namespace:   nsSpec.ObjectMeta.Name,
-			AccessToken: string(accessToken.Name),
+		kubeconfig, err := c.GetKubeconfig(nsSpec.ObjectMeta.Name, secret, ctx)
+		if err != nil {
+			log.Errorf("Error creating kubeconfig: %s", err)
+			errorResponse := models.Response{
+				Message:   "Error creating kubeconfig",
+				Namespace: nsSpec.ObjectMeta.Name,
+			}
+			return ctx.JSON(http.StatusInternalServerError, errorResponse)
 		}
 
-		return ctx.JSON(http.StatusOK, successResponse)
+		return ctx.JSON(http.StatusCreated, kubeconfig)
 	} else {
 		errorResponse := models.Response{
 			Message:   "Namespace already exists",
@@ -139,12 +146,12 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	namespace := strings.Trim(ctx.Param("namespace"), "/")
 
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Errorf("Namespace %s not found", namespace)
+		log.Warnf("Namespace %s is invalid", namespace)
 		errorResponse := models.Response{
-			Message:   "Namespace not found",
+			Message:   "Invalid input namespace",
 			Namespace: namespace,
 		}
-		return ctx.JSON(http.StatusNotFound, errorResponse)
+		return ctx.JSON(http.StatusForbidden, errorResponse)
 	} else {
 		successReponse := models.Response{
 			Message:   "Namespace successfully found",
@@ -154,7 +161,68 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	}
 }
 
-func (c *Container) craftRolebindingSpecification(namespace string, users []string) (*rbacv1.RoleBinding, error) {
+// get secret name with service account token for a given namespace and generate a kubeconfigiuration
+func (c *Container) GetKubeconfig(namespace string, secret *v1.Secret, ctx echo.Context) (*clientcmdapi.Config, error) {
+	serviceAccountSecret, err := c.clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Errorf("Error getting service account token secret: %s", err)
+		errorResponse := models.Response{
+			Message:   "Error getting service account token secret",
+			Namespace: namespace,
+		}
+		return nil, ctx.JSON(http.StatusInternalServerError, errorResponse)
+	}
+	kubeconfig, err := c.craftKubeconfig(namespace, serviceAccountSecret)
+	if err != nil {
+		log.Errorf("Error crafting kubeconfig: %s", err)
+		errorResponse := models.Response{
+			Message:   "Error crafting kubeconfig",
+			Namespace: namespace,
+		}
+		return nil, ctx.JSON(http.StatusInternalServerError, errorResponse)
+	}
+	return kubeconfig, nil
+}
+
+// get namespace and service account token secret name for a given namespace
+// craft a kubeconfig and return it
+func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clientcmdapi.Config, error) {
+	clusterName := "default"
+	// get cluster endpoint
+	clusterEndpoint := "https://127.0.0.1:6443"
+	// get cluster certificate authority data
+	clusterCertificateAuthorityData := secret.Data["ca.crt"]
+	// get service account token
+	serviceAccountToken := secret.Data["token"]
+	// get service account name
+	serviceAccountName := secret.Annotations["kubernetes.io/service-account.name"]
+	// get service account namespace
+	serviceAccountNamespace := secret.Namespace
+
+	// create a kubeconfig
+	kubeconfig := clientcmdapi.NewConfig()
+	// set cluster
+	kubeconfig.Clusters[clusterName] = &clientcmdapi.Cluster{
+		Server:                   clusterEndpoint,
+		CertificateAuthorityData: clusterCertificateAuthorityData,
+	}
+	// set auth info
+	kubeconfig.AuthInfos[serviceAccountName] = &clientcmdapi.AuthInfo{
+		Token: string(serviceAccountToken),
+	}
+	// set context
+	kubeconfig.Contexts[serviceAccountName] = &clientcmdapi.Context{
+		Cluster:   clusterName,
+		AuthInfo:  serviceAccountName,
+		Namespace: serviceAccountNamespace,
+	}
+	// set current context
+	kubeconfig.CurrentContext = serviceAccountName
+
+	return kubeconfig, nil
+}
+
+func (c *Container) craftRolebindingSpecification(namespace string, users []string, serviceAccountName string) (*rbacv1.RoleBinding, error) {
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespace + "troubleshooters",
@@ -175,6 +243,12 @@ func (c *Container) craftRolebindingSpecification(namespace string, users []stri
 			Name:     user,
 		})
 	}
+
+	// add service account to the list of subjects
+	rb.Subjects = append(rb.Subjects, rbacv1.Subject{
+		Kind: rbacv1.ServiceAccountKind,
+		Name: serviceAccountName,
+	})
 
 	return rb, nil
 }
@@ -230,8 +304,29 @@ func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace strin
 }
 
 func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Clientset, secret *v1.Secret, ns string) (*v1.Secret, error) {
+	//Create Token Secret, wait for it to be created and then return it
+
 	secret, err := clientset.CoreV1().Secrets(ns).Create(context.TODO(), secret, metav1.CreateOptions{})
-	return secret, err
+	if err != nil {
+		return nil, err
+	}
+	//loop until secret has a data field with a token in it or until timeout is reached (10 seconds) and then return it or error if timeout is reached before token is created in secret data field (should not happen)
+	timeout := time.After(10 * time.Second)
+	tick := time.Tick(500 * time.Millisecond)
+	for {
+		select {
+		case <-timeout:
+			return nil, errors.New("timeout reached before token was created in secret data field")
+		case <-tick:
+			secret, err := clientset.CoreV1().Secrets(ns).Get(context.TODO(), secret.Name, metav1.GetOptions{})
+			if err != nil {
+				return nil, err
+			}
+			if secret.Data["token"] != nil {
+				return secret, nil
+			}
+		}
+	}
 }
 
 func createNamespaceQuota(clientset *kubernetes.Clientset, quota *v1.ResourceQuota, ns string) (*v1.ResourceQuota, error) {
