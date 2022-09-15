@@ -1,9 +1,9 @@
 package models
 
 type Config struct {
-	LogLevel  string `yaml:"logLevel"`
-	KubeConfigPath    string    `yaml:"kubeConfigPath"`
-	Namespace struct {
+	LogLevel       string `yaml:"logLevel"`
+	KubeConfigPath string `yaml:"kubeConfigPath"`
+	Namespace      struct {
 		Prefix    string    `yaml:"prefix"`
 		Suffix    string    `yaml:"suffix"`
 		Duration  string    `yaml:"duration"`
@@ -14,13 +14,13 @@ type Config struct {
 
 type Resources struct {
 	Requests struct {
-		cpu     string `yaml:"cpu"`
-		memory  string `yaml:"memory"`
-		storage string `yaml:"storage"`
+		CPU     string `yaml:"cpu"`
+		Memory  string `yaml:"memory"`
+		Storage string `yaml:"storage"`
 	} `yaml:"requests"`
 	Limits struct {
-		cpu    string `yaml:"cpu"`
-		memory string `yaml:"memory"`
+		CPU    string `yaml:"cpu"`
+		Memory string `yaml:"memory"`
 	} `yaml:"limits"`
 }
 

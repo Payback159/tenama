@@ -41,6 +41,11 @@ func newConfig(configPath string) (*models.Config, error) {
 	return config, nil
 }
 
+func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error) {
+	nl, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	return nl, err
+}
+
 func cleanupNamespaces(clientset *kubernetes.Clientset, pre string) {
 	cleanupInterval, _ := time.ParseDuration("5m")
 	for {
@@ -82,22 +87,15 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string) {
 				}
 			}
 		}
-		//Put the goroutine to sleep for some time to not have excessive logging and calls against the Kubernetes API.
+		//Put the goroutine to sleep for some time to avoid
+		// excessive logging & too many calls against the Kubernetes API.
 		time.Sleep(cleanupInterval)
 	}
-}
-
-func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error) {
-	nl, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
-	return nl, err
 }
 
 func main() {
 	// consts
 	const cfgPath = "./config.yaml"
-	const role = "edit"
-	const separationString = "-"
-	const generatedDefaulfSuffixLength = 5
 
 	var cfg *models.Config
 	var clientset *kubernetes.Clientset
@@ -143,40 +141,39 @@ func main() {
 		log.Fatalf("Could not create k8s client: %s", err)
 	}
 
+	c, err := handlers.NewContainer(clientset, cfg)
+	if err != nil {
+		log.Fatalf("Container for the handler could not be initialized: %s", err)
+	}
+	c.SetBasicAuthUserList(cfg)
+
 	// create new echo instance and register authenticated group
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = false
 	ag := e.Group("/namespace")
 
-	//todo: handle the error!
-	c, err := handlers.NewContainer()
-	if err != nil {
-		log.Fatalf("Container for the handler could not be initialized: %s", err)
-	}
-	c.SetBasicAuthUserList(cfg)
-
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
+	//ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
 
 	// GetVersion - Outputs the version of tenama
 	e.Static("/docs", ".docs/swagger/")
 	e.Static("/", ".docs/swagger/")
 
 	// CreateNamespace - Create a new namespace
-	ag.POST("/namespace", c.CreateNamespace)
+	ag.POST("", c.CreateNamespace)
 
 	// DeleteNamespace - Deletes a namespace
-	ag.DELETE("/namespace/:namespace", c.DeleteNamespace)
+	ag.DELETE(":namespace", c.DeleteNamespace)
 
 	// GetNamespaceByName - Find namespace by name
-	ag.GET("/namespace/:namespace", c.GetNamespaceByName)
-
-	// Start server
-	e.Logger.Fatal(e.Start(":8080"))
+	ag.GET(":namespace", c.GetNamespaceByName)
 
 	// start namespace cleanup logic
 	go cleanupNamespaces(clientset, cfg.Namespace.Prefix)
+
+	// Start server
+	e.Logger.Fatal(e.Start(":8080"))
 }
