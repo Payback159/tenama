@@ -67,6 +67,13 @@ paths:
               style: simple
         "405":
           description: Invalid input
+        "500":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Internal Server Error"}
+          description: Internal Server Error
       security:
       - basicAuth: []
       summary: Create a new namespace
@@ -97,9 +104,27 @@ paths:
               schema:
                 type: string
               style: simple
+        "403":
+          description: The user is not authorized to perform this operation
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Forbidden"}
         "404":
-          content: {}
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Namespace not found"}
           description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Internal Server Error"}
+          description: Internal Server Error
       security:
       - basicAuth: []
       summary: Deletes a namespace
@@ -135,9 +160,23 @@ paths:
               schema:
                 type: string
               style: simple
+        "403":
+          description: The user is not authorized to perform this operation
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Forbidden"}
         "404":
           content: {}
           description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Internal Server Error"}
+          description: Internal Server Error
       security:
       - basicAuth: []
       summary: Find namespace by name
