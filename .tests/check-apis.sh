@@ -28,6 +28,7 @@ curl -X 'GET' \
   'http://localhost:8080/namespace/'${NSN}'' \
   -H 'accept: application/yaml'
 
+sleep 5
 echo "Delete created namespace"
 
 curl -X 'DELETE' \
