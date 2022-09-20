@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	//import kubernetes clientcmdapi
+	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -98,7 +99,23 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			return ctx.JSON(http.StatusInternalServerError, errorResponse)
 		}
 
-		return ctx.JSON(http.StatusCreated, kubeconfig)
+		//convert kubeconfig to valide yaml configuration and return it as yaml response
+		kubeconfigYaml, err := convertKubeconfigToYaml(kubeconfig)
+		if err != nil {
+			log.Errorf("Error converting kubeconfig to yaml: %s", err)
+			errorResponse := models.Response{
+				Message:   "Error converting kubeconfig to yaml",
+				Namespace: nsSpec.ObjectMeta.Name,
+			}
+			return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		}
+		response := models.Response{
+			Message:    "Namespace created",
+			Namespace:  nsSpec.ObjectMeta.Name,
+			KubeConfig: kubeconfigYaml,
+		}
+		return ctx.JSON(http.StatusOK, response)
+
 	} else {
 		errorResponse := models.Response{
 			Message:   "Namespace already exists",
@@ -161,6 +178,16 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	}
 }
 
+// convertKubeconfigToYaml
+func convertKubeconfigToYaml(kubeconfig *clientcmdapi.Config) ([]byte, error) {
+	var kubeconfigYaml []byte
+	var err error
+	if kubeconfigYaml, err = clientcmd.Write(*kubeconfig); err != nil {
+		return nil, err
+	}
+	return kubeconfigYaml, nil
+}
+
 // get secret name with service account token for a given namespace and generate a kubeconfigiuration
 func (c *Container) GetKubeconfig(namespace string, secret *v1.Secret, ctx echo.Context) (*clientcmdapi.Config, error) {
 	serviceAccountSecret, err := c.clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
@@ -189,7 +216,7 @@ func (c *Container) GetKubeconfig(namespace string, secret *v1.Secret, ctx echo.
 func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clientcmdapi.Config, error) {
 	clusterName := "default"
 	// get cluster endpoint
-	clusterEndpoint := "https://127.0.0.1:6443"
+	clusterEndpoint := c.config.Kubernetes.ClusterEndpoint
 	// get cluster certificate authority data
 	clusterCertificateAuthorityData := secret.Data["ca.crt"]
 	// get service account token

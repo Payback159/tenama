@@ -1,9 +1,12 @@
 package models
 
 type Config struct {
-	LogLevel       string `yaml:"logLevel"`
-	KubeConfigPath string `yaml:"kubeConfigPath"`
-	Namespace      struct {
+	LogLevel        string `yaml:"logLevel"`
+	CleanupInterval string `yaml:"cleanupInterval"`
+	Kubernetes      struct {
+		ClusterEndpoint string `yaml:"clusterEndpoint"`
+	}
+	Namespace struct {
 		Prefix    string    `yaml:"prefix"`
 		Suffix    string    `yaml:"suffix"`
 		Duration  string    `yaml:"duration"`
