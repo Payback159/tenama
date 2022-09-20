@@ -46,8 +46,8 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 	return nl, err
 }
 
-func cleanupNamespaces(clientset *kubernetes.Clientset, pre string) {
-	cleanupInterval, _ := time.ParseDuration("5m")
+func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval string) {
+	cleanupInterval, _ := time.ParseDuration(interval)
 	for {
 		log.Infof("Check if expired namespaces with the prefix %s exist", pre)
 		today := time.Now()
@@ -172,7 +172,7 @@ func main() {
 	ag.GET(":namespace", c.GetNamespaceByName)
 
 	// start namespace cleanup logic
-	go cleanupNamespaces(clientset, cfg.Namespace.Prefix)
+	go cleanupNamespaces(clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":8080"))
