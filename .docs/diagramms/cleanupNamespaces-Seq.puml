@@ -1,0 +1,23 @@
+@startuml Tenama-Sequence-Diagram
+title Cleanup Namespaces
+!theme plain
+box "Tenama" #LightBlue
+participant "Tenama-Server" as TS
+end box
+participant "Kubernetes-API" as KA
+
+note over TS: The <cleanupInterval> can be configured.
+loop #LightGoldenRodYellow After every <cleanupInterval>
+    activate TS
+    TS -> KA: getListOfNamespaces
+    activate KA
+    return NamespaceList
+    loop #LightSalmon for each namespace in list
+        alt#Gold #LightGreen Namespace duration expired
+        TS -> KA: delete namespace
+        activate KA
+        return namespace deleted
+        end
+    end
+end
+@enduml
