@@ -1,0 +1,45 @@
+@startuml Tenama-Sequence-Diagram
+title Create Namespace
+!theme plain
+box "Tenama" #LightBlue
+participant "Tenama-API" as TA
+participant "Authentication-Middleware" as AM
+participant "Tenama-Server" as TS
+end box
+participant "Kubernetes-API" as KA
+
+[-> TA: POST:/namespace
+note left: some http client makes a request
+activate TA
+TA -> AM: authenticateUser
+activate AM
+alt#Gold #LightGreen User authentication succesfully
+AM -> TA: User authentication successfully
+AM -> AM: 
+TA -> TS: createNamespace
+activate TS
+TS -> KA: createNamespace
+activate KA
+return namespace created
+TS -> KA: create ServiceAccount
+activate KA
+return ServiceAccount created
+TS -> KA: create Rolebinding
+activate KA
+return Rolebinding created
+TS -> KA: get ServiceAccountToken
+activate KA
+return ServiceAccountToken
+TS -> TS: craftKubeConfig
+return kubeconfig
+TA -> TA: craftNamespaceResponse
+TA -->[:createNamespaceResponse 
+else #LightPink User authentication failed
+AM -> TA: User authentication failed
+TA -->[: User authentication failed
+end
+deactivate AM
+deactivate TS
+deactivate TA
+
+@enduml
