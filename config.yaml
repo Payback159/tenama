@@ -1,4 +1,4 @@
-logLevel: INFO
+logLevel: info
 cleanupInterval: 10m
 kubernetes:
   clusterEndpoint: https://127.0.0.1/ # publicURL to the Kubernetes API
