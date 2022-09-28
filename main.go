@@ -9,12 +9,11 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/Payback159/tenama/handlers"
 	"github.com/Payback159/tenama/models"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
 	"gopkg.in/yaml.v2"
 
 	v1 "k8s.io/api/core/v1"
@@ -61,7 +60,7 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 		}
 
 		for _, n := range namespaceList.Items {
-			log.Tracef("Iterating over namespaces: current iteration: %s", n.Name)
+			log.Debugf("Iterating over namespaces: current iteration: %s", n.Name)
 			if strings.HasPrefix(n.Name, pre) {
 				namespaceDuration, err := time.ParseDuration(n.Labels["tenama/namespace-duration"])
 				if err != nil {
@@ -72,9 +71,9 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 				//Checks if the expiration date of the namespace is further in the future than the creation date.
 				if namespaceExpirationTimestamp != namespaceCreationTimestamp.Time {
 					//Calculates the lifetime of the namespace based on the namespace creation date + the duration defined for this namespace and checks if the current date exceeds the time.
-					log.Tracef("Creation timestamp of the namespace: %s", namespaceCreationTimestamp.String())
-					log.Tracef("Expiration timestamp of the namespace: %s", namespaceExpirationTimestamp.String())
-					log.Tracef("Current timestamp: %s", today.String())
+					log.Debugf("Creation timestamp of the namespace: %s", namespaceCreationTimestamp.String())
+					log.Debugf("Expiration timestamp of the namespace: %s", namespaceExpirationTimestamp.String())
+					log.Debugf("Current timestamp: %s", today.String())
 					if namespaceExpirationTimestamp.Before(today) {
 						log.Infof("Delete namespace %s because it has expired.", n.Name)
 						err := clientset.CoreV1().Namespaces().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})
@@ -100,20 +99,28 @@ func main() {
 	var cfg *models.Config
 	var clientset *kubernetes.Clientset
 
-	log.SetFormatter(&log.JSONFormatter{})
-
 	cfg, err := newConfig(cfgPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error reading config file: %s", err)
 	}
 
-	parsedLevel, err := log.ParseLevel(cfg.LogLevel)
 	if err != nil {
 		panic(fmt.Sprintf("Could not parse log level from string: %s", cfg.LogLevel))
 	}
-	log.SetLevel(parsedLevel)
 
-	log.Trace(cfg)
+	// set log level
+	switch strings.ToUpper(cfg.LogLevel) {
+	case "DEBUG":
+		log.SetLevel(log.DEBUG)
+	case "INFO":
+		log.SetLevel(log.INFO)
+	case "WARN":
+		log.SetLevel(log.WARN)
+	case "ERROR":
+		log.SetLevel(log.ERROR)
+	default:
+		log.SetLevel(log.INFO)
+	}
 
 	// prepare kubernetes client configuration
 	var kubeconfig *string
