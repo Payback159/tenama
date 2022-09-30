@@ -11,4 +11,16 @@ rules:
   - get
   - list
   - watch
-
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups: #allow to bind admin role to give oneself admin rights in the created namespace
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  resourceNames:
+  - admin
+  - edit
+  verbs:
+  - bind

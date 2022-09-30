@@ -16,5 +16,5 @@ spec:
           service:
             name: tenama
             port: 
-              name: http
+              name: https
 

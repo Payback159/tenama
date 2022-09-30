@@ -7,8 +7,8 @@ metadata:
   namespace: tenama-system
 spec:
   ports:
-  - port: 80
-    name: http
+  - port: 443
+    name: https
     protocol: TCP
     targetPort: 8080
   selector:
