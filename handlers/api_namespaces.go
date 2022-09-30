@@ -48,6 +48,9 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
 		createNamespace(c.clientset, nsSpec, namespaceList)
+		// create rolebinding for tenama service account
+		trb := c.craftTenamaRoleBinding(nsSpec.ObjectMeta.Name, "tenama")
+		createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
 		quotaSpec := c.craftNamespaceQuotaSpecification(nsSpec.ObjectMeta.Name)
 		_, err := createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
 		if err != nil {
@@ -68,7 +71,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			}
 			return ctx.JSON(http.StatusInternalServerError, errorResponse)
 		}
-		rbSpec, _ := c.craftRolebindingSpecification(nsSpec.ObjectMeta.Name, ns.Users, serviceAccountSpec.ObjectMeta.Name)
+		rbSpec, _ := c.craftUserRolebindings(nsSpec.ObjectMeta.Name, ns.Users, serviceAccountSpec.ObjectMeta.Name)
 		_, err = createRolebinding(c.clientset, rbSpec, nsSpec.ObjectMeta.Name)
 		if err != nil {
 			log.Errorf("Error creating rolebinding: %s", err)
@@ -249,7 +252,29 @@ func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clien
 	return kubeconfig, nil
 }
 
-func (c *Container) craftRolebindingSpecification(namespace string, users []string, serviceAccountName string) (*rbacv1.RoleBinding, error) {
+// craft rolebinding for service account tenama from tenama-system namespace and bind clusterrole admin
+func (c *Container) craftTenamaRoleBinding(namespace string, serviceAccountName string) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenama-admin",
+			Namespace: namespace,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      serviceAccountName,
+				Namespace: "tenama-system",
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "admin",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+}
+
+func (c *Container) craftUserRolebindings(namespace string, users []string, serviceAccountName string) (*rbacv1.RoleBinding, error) {
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespace + "troubleshooters",
