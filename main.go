@@ -181,6 +181,9 @@ func main() {
 	// start namespace cleanup logic
 	go cleanupNamespaces(clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
 
+	e.GET("/healthz", c.LivenessProbe)
+	e.GET("/readiness", c.ReadinessProbe)
+
 	// Start server
 	e.Logger.Fatal(e.Start(":8080"))
 }
