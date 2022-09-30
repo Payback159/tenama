@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tenama
+  namespace: default
+  labels:
+    name: tenama
+spec:
+  rules:
+  - host: tenama.example.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: tenama
+            port: 
+              name: http
+
