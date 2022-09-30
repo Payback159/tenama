@@ -94,7 +94,7 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 
 func main() {
 	// consts
-	const cfgPath = "./config.yaml"
+	const cfgPath = "./config/config.yaml"
 
 	var cfg *models.Config
 	var clientset *kubernetes.Clientset
