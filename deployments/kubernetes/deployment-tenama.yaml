@@ -4,7 +4,7 @@ metadata:
   labels:
     app: tenama
   name: tenama
-  namespace: default
+  namespace: tenama-system
 spec:
   progressDeadlineSeconds: 600
   replicas: 2

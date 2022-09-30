@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: tenama
-  namespace: default
+  namespace: tenama-system
   labels:
     name: tenama
 spec:
