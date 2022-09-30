@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: tenama
+  name: tenama
+  namespace: default
+spec:
+  ports:
+  - port: 80
+    name: http
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: tenama
+  sessionAffinity: None
+  type: ClusterIP
+
