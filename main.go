@@ -163,7 +163,7 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	//ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
+	ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
 
 	// GetVersion - Outputs the version of tenama
 	e.Static("/docs", ".docs/swagger/")
