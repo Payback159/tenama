@@ -12,7 +12,7 @@ on:
      - 'Dockerfile'
      - 'go.mod'
      - 'go.sum'
-     - '*.go'
+     - '**/*.go'
     branches: [ main ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
