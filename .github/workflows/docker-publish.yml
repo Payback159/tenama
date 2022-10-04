@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@6a84743051be17cee477b0a26bd866b5dba996e4 # v3
+        uses: actions/checkout@6a84743051be17cee477b0a26bd866b5dba996e4
         with:
           fetch-depth: 0
 
