@@ -24,13 +24,14 @@ func (c *Container) SetBasicAuthUserList(cfg *models.Config) {
 
 func (c *Container) BasicAuthValidator(username, password string, e echo.Context) (bool, error) {
 	// Be careful to use constant time comparison to prevent timing attacks
+	log.Debugf("Checking user %s against basic auth list", username)
 	for _, u := range userList {
-		log.Debugf("Checking user %s against basic auth list", u.username)
+		log.Debugf("Checking user %s against user from request %s", u.username, username)
 		if subtle.ConstantTimeCompare([]byte(username), []byte(u.username)) == 1 &&
 			subtle.ConstantTimeCompare([]byte(password), []byte(u.password)) == 1 {
 			return true, nil
 		}
 	}
-	log.Warn("User %s not found in basic auth list", username)
+	log.Warnf("User %s not found in basic auth list", username)
 	return false, nil
 }
