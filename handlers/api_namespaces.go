@@ -306,6 +306,7 @@ func (c *Container) craftUserRolebindings(namespace string, users []string, serv
 }
 
 func createRolebinding(clientset *kubernetes.Clientset, rb *rbacv1.RoleBinding, ns string) (*rbacv1.RoleBinding, error) {
+	log.Debugf("creating binding: %s for service account %s in namespace %s for users", rb.Name, rb.Subjects[:len(rb.Subjects)-1], ns)
 	rb, err := clientset.RbacV1().RoleBindings(ns).Create(context.TODO(), rb, metav1.CreateOptions{})
 	return rb, err
 }
@@ -330,6 +331,7 @@ func (c *Container) craftNamespaceQuotaSpecification(namespace string) *v1.Resou
 
 // craft ServiceAccount to give access to the newly generated namespace
 func (c *Container) craftServiceAccountSpecification(namespace string) *v1.ServiceAccount {
+	log.Debugf("crafting service account for the namespace %s", namespace)
 	return &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.config.Namespace.Prefix + separationString + "sa",
@@ -339,12 +341,14 @@ func (c *Container) craftServiceAccountSpecification(namespace string) *v1.Servi
 }
 
 func (c *Container) createServiceAccount(clientset *kubernetes.Clientset, sa *v1.ServiceAccount, ns string) (*v1.ServiceAccount, error) {
+	log.Debugf("creating ServiceAccount %s in namespace %s", sa.Name, ns)
 	sa, err := clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
 	return sa, err
 }
 
 // craft secret for service account token for the crafted ServiceAccount
 func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace string) *v1.Secret {
+	log.Debugf("crafting secret for the service account in the namespace %s", namespace)
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        c.config.Namespace.Prefix + separationString + "sa-token",
@@ -356,6 +360,7 @@ func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace strin
 }
 
 func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Clientset, secret *v1.Secret, ns string) (*v1.Secret, error) {
+	log.Debugf("creating Secret %s in namespace %s", secret.Name, ns)
 	//Create Token Secret, wait for it to be created and then return it
 
 	secret, err := clientset.CoreV1().Secrets(ns).Create(context.TODO(), secret, metav1.CreateOptions{})
@@ -382,12 +387,12 @@ func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Cli
 }
 
 func createNamespaceQuota(clientset *kubernetes.Clientset, quota *v1.ResourceQuota, ns string) (*v1.ResourceQuota, error) {
+	log.Debugf("creating quota %s in namespace %s", quota.Name, ns)
 	quota, err := clientset.CoreV1().ResourceQuotas(ns).Create(context.TODO(), quota, metav1.CreateOptions{})
 	return quota, err
 }
 
 func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.Context) (*v1.Namespace, error) {
-
 	var nsn string
 
 	if c.config.Namespace.Prefix == "" {
