@@ -304,7 +304,7 @@ func (c *Container) craftUserRolebindings(namespace string, users []string, serv
 		})
 	}
 
-	// add service account to the list of subjects
+	// add ServiceAccount that is returned to the caller so that it can access the namespace
 	rb.Subjects = append(rb.Subjects, rbacv1.Subject{
 		Kind: rbacv1.ServiceAccountKind,
 		Name: serviceAccountName,
@@ -377,12 +377,13 @@ func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Cli
 	}
 	//loop until secret has a data field with a token in it or until timeout is reached (10 seconds) and then return it or error if timeout is reached before token is created in secret data field (should not happen)
 	timeout := time.After(10 * time.Second)
-	tick := time.Tick(500 * time.Millisecond)
+	//use ticker to check every 500ms if secret has token in data field
+	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:
 			return nil, errors.New("timeout reached before token was created in secret data field")
-		case <-tick:
+		case <-ticker.C:
 			secret, err := clientset.CoreV1().Secrets(ns).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil {
 				return nil, err
@@ -471,7 +472,7 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 }
 
 func createNamespace(clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) *v1.Namespace {
-	log.Info("Considering to create namespace " + nsSpec.Name)
+	log.Infof("Considering to create namespace %s", nsSpec.Name)
 	if !existsNamespaceWithPrefix(namespaceList, nsSpec.Name) {
 		ns, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
