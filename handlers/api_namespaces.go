@@ -50,9 +50,17 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 		createNamespace(c.clientset, nsSpec, namespaceList)
 		// create rolebinding for tenama service account
 		trb := c.craftTenamaRoleBinding(nsSpec.ObjectMeta.Name, "tenama")
-		createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
+		_, err := createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
+		if err != nil {
+			log.Errorf("Error creating rolebinding: %s", err)
+			errorResponse := models.Response{
+				Message:   "Error creating rolebinding",
+				Namespace: nsSpec.ObjectMeta.Name,
+			}
+			return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		}
 		quotaSpec := c.craftNamespaceQuotaSpecification(nsSpec.ObjectMeta.Name)
-		_, err := createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
+		_, err = createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
 		if err != nil {
 			log.Errorf("Error creating namespace quota: %s", err)
 			errorResponse := models.Response{
