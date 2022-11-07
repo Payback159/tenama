@@ -195,10 +195,10 @@ components:
   schemas:
     Namespace:
       example:
-        duration: duration
+        duration: 24h
         infix: infix
         suffix: suffix
-        users: users
+        users: ["firstname.lastname@example.com"]
       properties:
         infix:
           type: string
