@@ -47,10 +47,18 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 	ns, _ := parseNamespaceRequest(ctx)
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
-		createNamespace(c.clientset, nsSpec, namespaceList)
+		_, err := createNamespace(c.clientset, nsSpec, namespaceList)
+		if err != nil {
+			log.Errorf("Error creating namespace: %s", err)
+			errorResponse := models.Response{
+				Message:   "Error creating namespace",
+				Namespace: nsSpec.ObjectMeta.Name,
+			}
+			return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		}
 		// create rolebinding for tenama service account
 		trb := c.craftTenamaRoleBinding(nsSpec.ObjectMeta.Name, "tenama")
-		_, err := createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
+		_, err = createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
 		if err != nil {
 			log.Errorf("Error creating rolebinding: %s", err)
 			errorResponse := models.Response{
@@ -127,13 +135,12 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 		}
 		return ctx.JSON(http.StatusOK, response)
 
-	} else {
-		errorResponse := models.Response{
-			Message:   "Namespace already exists",
-			Namespace: nsSpec.ObjectMeta.Name,
-		}
-		return ctx.JSON(http.StatusConflict, errorResponse)
 	}
+	errorResponse := models.Response{
+		Message:   "Namespace already exists",
+		Namespace: nsSpec.ObjectMeta.Name,
+	}
+	return ctx.JSON(http.StatusConflict, errorResponse)
 }
 
 // DeleteNamespace - Deletes a namespace
@@ -152,13 +159,6 @@ func (c *Container) DeleteNamespace(ctx echo.Context) error {
 			}
 			return ctx.JSON(http.StatusNotFound, errorResponse)
 		}
-	} else {
-		log.Errorf("Namespace %s not found", namespace)
-		errorResponse := models.Response{
-			Message:   "Namespace not found",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusNotFound, errorResponse)
 	}
 
 	successResponse := models.Response{
@@ -174,19 +174,19 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	namespace := strings.Trim(ctx.Param("namespace"), "/")
 
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Warnf("Namespace %s is invalid", namespace)
+		log.Infof("SearchingNamespace %s is invalid", namespace)
 		errorResponse := models.Response{
 			Message:   "Invalid input namespace",
 			Namespace: namespace,
 		}
 		return ctx.JSON(http.StatusForbidden, errorResponse)
-	} else {
-		successReponse := models.Response{
-			Message:   "Namespace successfully found",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusOK, successReponse)
 	}
+
+	successReponse := models.Response{
+		Message:   "Namespace successfully found",
+		Namespace: namespace,
+	}
+	return ctx.JSON(http.StatusOK, successReponse)
 }
 
 // convertKubeconfigToYaml
@@ -429,11 +429,13 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 	namespaceDuration, err := time.ParseDuration(ns.Duration)
 	if err != nil {
 		log.Warnf("Error parsing duration: %s", ns.Duration)
-		log.Infof("Namespace duration is not set, using default value %s", c.config.Namespace.Duration)
-		ns.Duration = c.config.Namespace.Duration
-	} else {
-		ns.Duration = fmt.Sprint(namespaceDuration)
+		errorResponse := models.Response{
+			Message:   "Error parsing duration",
+			Namespace: nsn,
+		}
+		return nil, ctx.JSON(http.StatusBadRequest, errorResponse)
 	}
+	ns.Duration = fmt.Sprint(namespaceDuration)
 
 	nsSpec := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -471,19 +473,19 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 	return nl, err
 }
 
-func createNamespace(clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) *v1.Namespace {
+func createNamespace(clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) (*v1.Namespace, error) {
 	log.Infof("Considering to create namespace %s", nsSpec.Name)
 	if !existsNamespaceWithPrefix(namespaceList, nsSpec.Name) {
 		ns, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
-			log.Fatalf("Error creating namespace %s, error was: %s", nsSpec, err)
+			log.Errorf("Error creating namespace %s, error was: %s", nsSpec, err)
+			return nil, err
 		}
 		log.Infof("Created Namespace %s", nsSpec.Name)
-		return ns
-	} else {
-		log.Infof("Namespace matching %s already exists!", nsSpec.Name)
-		return nsSpec
+		return ns, nil
 	}
+	log.Infof("Namespace matching %s already exists!", nsSpec.Name)
+	return nsSpec, nil
 }
 
 // replaces k8s invalid chars (separationRune) in inputString
@@ -509,9 +511,8 @@ func validateAndTransformToK8sName(inputString string, separationRune rune) (str
 				"allowed are only ones that match the regex: %s, appending a '%s' instead of this character!",
 				inputStringLowerCase, chs, r, string(separationRune))
 			normalizedNameRunes = append(normalizedNameRunes, separationRune)
-		} else {
-			normalizedNameRunes = append(normalizedNameRunes, ch)
 		}
+		normalizedNameRunes = append(normalizedNameRunes, ch)
 	}
 
 	// truncate too long name
@@ -559,9 +560,9 @@ func chompEndingCharacter(runearr []rune, runechar rune) []rune {
 	}
 	if runearr[len(runearr)-1] == runechar {
 		return chompEndingCharacter(runearr[:len(runearr)-1], runechar)
-	} else {
-		return runearr
 	}
+
+	return runearr
 }
 
 func StringWithCharset(length int, charset string) string {
