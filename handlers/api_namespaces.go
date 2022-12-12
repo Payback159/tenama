@@ -192,6 +192,16 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 		return ctx.JSON(http.StatusForbidden, errorResponse)
 	}
 
+	_, err := c.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+	if err != nil {
+		log.Errorf("Error getting namespace: %s", err)
+		errorResponse := models.Response{
+			Message:   "Namespace not found",
+			Namespace: namespace,
+		}
+		return ctx.JSON(http.StatusNotFound, errorResponse)
+	}
+
 	successReponse := models.Response{
 		Message:   "Namespace successfully found",
 		Namespace: namespace,
