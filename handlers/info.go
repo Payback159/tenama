@@ -15,7 +15,7 @@ var commit = "unknown"
 func (c *Container) GetBuildInfo(e echo.Context) error {
 	return e.JSON(http.StatusOK, map[string]string{
 		"version":   version,
-		"builddate": builddate,
+		"buildDate": builddate,
 		"commit":    commit,
 	})
 }
