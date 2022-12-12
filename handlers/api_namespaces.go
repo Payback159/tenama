@@ -40,6 +40,21 @@ func parseNamespaceRequest(ctx echo.Context) (models.Namespace, error) {
 	return ns, nil
 }
 
+// parses different errors from kubernetes and returns a custom error message
+func NamespaceErrorHandler(ctx echo.Context, err error) error {
+	if strings.Contains(err.Error(), "must be no more than 63 characters") {
+		errorResponse := models.Response{
+			Message: "Namespace name must be no more than 63 characters",
+		}
+		return ctx.JSON(http.StatusBadRequest, errorResponse)
+	}
+
+	errorResponse := models.Response{
+		Message: "Error creating namespace",
+	}
+	return ctx.JSON(http.StatusInternalServerError, errorResponse)
+}
+
 // CreateNamespace - Create a new namespace
 // TODO: reduce complexity
 func (c *Container) CreateNamespace(ctx echo.Context) error {
@@ -49,12 +64,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
 		_, err := createNamespace(c.clientset, nsSpec, namespaceList)
 		if err != nil {
-			log.Errorf("Error creating namespace: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating namespace",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
+			return NamespaceErrorHandler(ctx, err)
 		}
 		// create rolebinding for tenama service account
 		trb := c.craftTenamaRoleBinding(nsSpec.ObjectMeta.Name, "tenama")
@@ -478,7 +488,7 @@ func createNamespace(clientset *kubernetes.Clientset, nsSpec *v1.Namespace, name
 	if !existsNamespaceWithPrefix(namespaceList, nsSpec.Name) {
 		ns, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
-			log.Errorf("Error creating namespace %s, error was: %s", nsSpec, err)
+			log.Errorf("Error creating namespace %s: %s", nsSpec.Name, err)
 			return nil, err
 		}
 		log.Infof("Created Namespace %s", nsSpec.Name)
