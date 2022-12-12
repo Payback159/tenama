@@ -61,7 +61,7 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 
 		for _, n := range namespaceList.Items {
 			log.Debugf("Iterating over namespaces: current iteration: %s", n.Name)
-			if strings.HasPrefix(n.Name, pre) {
+			if strings.HasPrefix(n.Name, pre) && n.Name != "tenama-system" {
 				namespaceDuration, err := time.ParseDuration(n.Labels["tenama/namespace-duration"])
 				if err != nil {
 					log.Errorf("Error parsing duration of namespace %s: %s", n.Name, err)
