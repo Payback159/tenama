@@ -181,6 +181,7 @@ func main() {
 	// start namespace cleanup logic
 	go cleanupNamespaces(clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
 
+	e.GET("/info", c.GetBuildInfo)
 	e.GET("/healthz", c.LivenessProbe)
 	e.GET("/readiness", c.ReadinessProbe)
 

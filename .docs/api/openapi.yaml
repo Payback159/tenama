@@ -20,6 +20,30 @@ tags:
 - description: Everything about your temporarily namespaces
   name: Namespaces
 paths:
+  /info:
+    get:
+      operationId: getInfo
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                example:
+                  version: 0.3.0
+                  buildDate: "2020-05-01T12:00:00Z"
+                  commit: 1234567890abcdef
+                properties:
+                  buildDate:
+                    type: string
+                  commit:
+                    type: string
+                  version:
+                    type: string
+                type: object
+          description: successful operation
+      summary: Returns information about the running tenama instance
+      tags:
+      - Documentation
   /docs:
     get:
       operationId: getDocumentation
