@@ -9,7 +9,7 @@ info:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   title: Tenama
-  version: 0.1.0
+  version: 0.3.0
 servers:
 - url: /
 tags:
@@ -93,6 +93,13 @@ paths:
           type: string
         style: simple
       responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Namespace successfully deleted"}
+          description: successful operation
         "400":
           content: {}
           description: Invalid Namespace supplied
@@ -147,7 +154,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Namespace'
+                type: string
+                example: {message: "Namespace successfully found"}
           description: successful operation
         "400":
           content: {}
