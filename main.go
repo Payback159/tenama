@@ -41,7 +41,9 @@ func newConfig(configPath string) (*models.Config, error) {
 }
 
 func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error) {
-	nl, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	nl, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "created-by=tenama",
+	})
 	return nl, err
 }
 
@@ -56,7 +58,7 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 			log.Errorf("Could not list namespace: %s", err)
 		}
 		if len(namespaceList.Items) == 0 {
-			log.Warn("Namespace List is empty, seems fishy!")
+			log.Warnf("No namespaces with the prefix %s found", pre)
 		}
 
 		for _, n := range namespaceList.Items {
@@ -78,7 +80,7 @@ func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval str
 						log.Infof("Delete namespace %s because it has expired.", n.Name)
 						err := clientset.CoreV1().Namespaces().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})
 						if err != nil {
-							log.Fatalf("Error deleting namespace: %s", err)
+							log.Errorf("Error deleting namespace: %s", err)
 						}
 					}
 				} else {
