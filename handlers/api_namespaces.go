@@ -120,7 +120,6 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 
 		kubeconfig, err := c.GetKubeconfig(nsSpec.ObjectMeta.Name, secret, ctx)
 		if err != nil {
-			log.Errorf("Error creating kubeconfig: %s", err)
 			errorResponse := models.Response{
 				Message:   "Error creating kubeconfig",
 				Namespace: nsSpec.ObjectMeta.Name,
@@ -393,7 +392,9 @@ func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Cli
 	if err != nil {
 		return nil, err
 	}
-	//loop until secret has a data field with a token in it or until timeout is reached (10 seconds) and then return it or error if timeout is reached before token is created in secret data field (should not happen)
+	//loop until secret has a data field with a token in it
+	// or until timeout is reached (10 seconds) and then return it
+	// or error if timeout is reached before token is created in secret data field (should not happen)
 	timeout := time.After(10 * time.Second)
 	//use ticker to check every 500ms if secret has token in data field
 	ticker := time.NewTicker(500 * time.Millisecond)
