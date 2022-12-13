@@ -175,10 +175,12 @@ func main() {
 	ag.POST("", c.CreateNamespace)
 
 	// DeleteNamespace - Deletes a namespace
-	ag.DELETE(":namespace", c.DeleteNamespace)
+	ag.DELETE("/:namespace", c.DeleteNamespace)
 
+	// GetNamespaceList - List all namespaces
+	ag.GET("", c.GetNamespaces)
 	// GetNamespaceByName - Find namespace by name
-	ag.GET(":namespace", c.GetNamespaceByName)
+	ag.GET("/:namespace", c.GetNamespaceByName)
 
 	// start namespace cleanup logic
 	go cleanupNamespaces(clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
