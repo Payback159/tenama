@@ -157,17 +157,24 @@ func (c *Container) DeleteNamespace(ctx echo.Context) error {
 	// get existing ns
 	namespace := strings.Trim(ctx.Param("namespace"), "/")
 
-	if strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Infof("Delete namespace %s through an API call.", namespace)
-		err := c.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
-		if err != nil {
-			log.Errorf("Error deleting namespace: %s", err)
-			errorResponse := models.Response{
-				Message:   "Namespace not found",
-				Namespace: namespace,
-			}
-			return ctx.JSON(http.StatusNotFound, errorResponse)
+	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
+		log.Infof("Namespace %s does not start with prefix %s", namespace, c.config.Namespace.Prefix)
+		errorResponse := models.Response{
+			Message:   "Namespace does not start with prefix " + c.config.Namespace.Prefix,
+			Namespace: namespace,
 		}
+		return ctx.JSON(http.StatusBadRequest, errorResponse)
+	}
+
+	log.Infof("Delete namespace %s through an API call.", namespace)
+	err := c.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
+	if err != nil {
+		log.Errorf("Error deleting namespace: %s", err)
+		errorResponse := models.Response{
+			Message:   "Namespace not found",
+			Namespace: namespace,
+		}
+		return ctx.JSON(http.StatusNotFound, errorResponse)
 	}
 
 	successResponse := models.Response{
