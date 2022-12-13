@@ -184,23 +184,62 @@ func (c *Container) DeleteNamespace(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, successResponse)
 }
 
+// GetNamespaces - Get all namespaces
+func (c *Container) GetNamespaces(ctx echo.Context) error {
+	namespaces, err := c.clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "created-by=tenama",
+	})
+	if err != nil {
+		log.Errorf("Error getting namespaces: %s", err)
+		errorResponse := models.Response{
+			Message: "Error getting namespaces",
+		}
+		return ctx.JSON(http.StatusInternalServerError, errorResponse)
+	}
+
+	// convert namespaces to a list of strings
+	var nsList []string
+	for _, ns := range namespaces.Items {
+		nsList = append(nsList, ns.ObjectMeta.Name)
+	}
+
+	successResponse := models.Response{
+		Message:    "Namespaces successfully retrieved",
+		Namespaces: nsList,
+	}
+
+	return ctx.JSON(http.StatusOK, successResponse)
+}
+
 // GetNamespaceByName - Find namespace by name
 func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	// get existing ns
 	namespace := strings.Trim(ctx.Param("namespace"), "/")
 
+	//Check if namespace is valid and starts with the prefix from the config file (e.g. tenama)
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Infof("SearchingNamespace %s is invalid", namespace)
+		log.Warnf("SearchingNamespace %s is invalid", namespace)
+
 		errorResponse := models.Response{
-			Message:   "Invalid input namespace",
+			Message:   "Namespace is invalid",
 			Namespace: namespace,
 		}
-		return ctx.JSON(http.StatusForbidden, errorResponse)
+		return ctx.JSON(http.StatusBadRequest, errorResponse)
 	}
 
-	_, err := c.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+	ns, err := c.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if err != nil {
 		log.Errorf("Error getting namespace: %s", err)
+		errorResponse := models.Response{
+			Message:   "Namespace not found",
+			Namespace: namespace,
+		}
+		return ctx.JSON(http.StatusInternalServerError, errorResponse)
+	}
+
+	//check if namespace is found
+	if ns == nil {
+		log.Warnf("Namespace %s not found", namespace)
 		errorResponse := models.Response{
 			Message:   "Namespace not found",
 			Namespace: namespace,
@@ -208,11 +247,11 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 		return ctx.JSON(http.StatusNotFound, errorResponse)
 	}
 
-	successReponse := models.Response{
+	successResponse := models.Response{
 		Message:   "Namespace successfully found",
 		Namespace: namespace,
 	}
-	return ctx.JSON(http.StatusOK, successReponse)
+	return ctx.JSON(http.StatusOK, successResponse)
 }
 
 // convertKubeconfigToYaml
@@ -434,17 +473,21 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 
 	if c.config.Namespace.Prefix == "" {
 		log.Errorf("Prefix is not set in config file")
-	} else {
-		nsn = c.config.Namespace.Prefix + separationString
+		return nil, errors.New("prefix is not set in config file")
 	}
+
+	nsn = c.config.Namespace.Prefix + separationString
+
 	if ns.Infix == "" {
 		log.Errorf("Infix is not set in request")
-	} else {
-		nsn = nsn + ns.Infix + separationString
+		return nil, errors.New("infix is not set in request")
 	}
+
+	nsn = nsn + ns.Infix + separationString
+
 	nsn, err := validateAndTransformToK8sName(nsn, []rune(separationString)[0])
 	if err != nil {
-		log.Fatalf("Error parsing namespace name: %s", nsn)
+		log.Errorf("Error parsing namespace name: %s", nsn)
 	}
 
 	if ns.Suffix != "" {
@@ -463,6 +506,7 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 		}
 		return nil, ctx.JSON(http.StatusBadRequest, errorResponse)
 	}
+
 	ns.Duration = fmt.Sprint(namespaceDuration)
 
 	nsSpec := &v1.Namespace{
