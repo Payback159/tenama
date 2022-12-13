@@ -65,6 +65,36 @@ paths:
       tags:
       - Documentation
   /namespace:
+    get:
+      operationId: getNamespaces
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                example:
+                  message: "Namespace successfully found"
+                  namespaces: []
+                properties:
+                  message:
+                    type: string
+                  namespaces:
+                    items:
+                      type: string
+                    type: array
+          description: successful operation
+        "500":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Error getting namespaces"}
+          description: Internal Server Error
+      security:
+      - basicAuth: []
+      summary: Get all namespaces
+      tags:
+      - Namespaces
     post:
       operationId: createNamespace
       requestBody:
@@ -105,6 +135,59 @@ paths:
       - Namespaces
       x-codegen-request-body-name: body
   /namespace/{namespace}:
+    get:
+      description: Returns a single namespace
+      operationId: getNamespace
+      parameters:
+      - description: name of namespace to return
+        explode: false
+        in: path
+        name: namespace
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Namespace successfully found"}
+          description: successful operation
+        "400":
+          content: {}
+          description: Invalid namespace supplied
+        "401":
+          description: Authentication information is missing or invalid
+          headers:
+            WWW_Authenticate:
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "403":
+          description: The user is not authorized to perform this operation
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Forbidden"}
+        "404":
+          content: {}
+          description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                type: string
+                example: {message: "Internal Server Error"}
+          description: Internal Server Error
+      security:
+      - basicAuth: []
+      summary: Get namespace by name
+      tags:
+      - Namespaces
     delete:
       operationId: deleteNamespace
       parameters:
@@ -159,59 +242,6 @@ paths:
       security:
       - basicAuth: []
       summary: Deletes a namespace
-      tags:
-      - Namespaces
-    get:
-      description: Returns a single namespace
-      operationId: getNamespaceByName
-      parameters:
-      - description: name of namespace to return
-        explode: false
-        in: path
-        name: namespace
-        required: true
-        schema:
-          type: string
-        style: simple
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Namespace successfully found"}
-          description: successful operation
-        "400":
-          content: {}
-          description: Invalid namespace supplied
-        "401":
-          description: Authentication information is missing or invalid
-          headers:
-            WWW_Authenticate:
-              explode: false
-              schema:
-                type: string
-              style: simple
-        "403":
-          description: The user is not authorized to perform this operation
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Forbidden"}
-        "404":
-          content: {}
-          description: Namespace not found
-        "500":
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Internal Server Error"}
-          description: Internal Server Error
-      security:
-      - basicAuth: []
-      summary: Find namespace by name
       tags:
       - Namespaces
 components:
