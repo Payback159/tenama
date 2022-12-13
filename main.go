@@ -178,7 +178,7 @@ func main() {
 	ag.DELETE("/:namespace", c.DeleteNamespace)
 
 	// GetNamespaceList - List all namespaces
-	ag.GET("", c.GetNamespaces)
+	//ag.GET("", c.GetNamespaces)
 	// GetNamespaceByName - Find namespace by name
 	ag.GET("/:namespace", c.GetNamespaceByName)
 
