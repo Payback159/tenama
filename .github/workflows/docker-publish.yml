@@ -113,7 +113,10 @@ jobs:
         uses: int128/docker-manifest-create-action@v1
         with:
           tags: ${{ steps.meta.outputs.tags }}
-          suffixes: ${{ matrix.platform//\//- }}
+          #suffixes: ${{ matrix.platform//\//- }}
+          suffixes: |
+            -linux-amd64
+            -linux-arm64
 
   release:
     needs: build
