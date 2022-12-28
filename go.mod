@@ -54,6 +54,6 @@ require (
 	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.2.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.25.3
-	k8s.io/client-go v0.25.3
+	k8s.io/api v0.26.0
+	k8s.io/client-go v0.26.0
 )
