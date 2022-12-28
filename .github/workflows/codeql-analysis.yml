@@ -20,6 +20,9 @@ on:
   schedule:
     - cron: '42 19 * * 3'
 
+permissions:  # added using https://github.com/step-security/secure-workflows
+  contents: read
+
 jobs:
   analyze:
     name: Analyze
@@ -37,6 +40,11 @@ jobs:
         # Learn more about CodeQL language support at https://git.io/codeql-language-support
 
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@ebacdc22ef6c2cfb85ee5ded8f2e640f4c776dd5 # v2.0.0
+      with:
+        egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
     - name: Checkout repository
       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b
 
