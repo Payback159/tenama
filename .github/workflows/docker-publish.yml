@@ -120,7 +120,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
       - name: Create Docker Manifests
         id: manifest
-        uses: int128/docker-manifest-create-action@a1999834782729abf1717de146b7f130e702ae73 # v1.0.0
+        uses: int128/docker-manifest-create-action@49367cfb107912d8eccdd95f63f4aa76abc070f5 # v1.2.0
         with:
           tags: ${{ steps.meta.outputs.tags }}
           #suffixes: ${{ matrix.platform//\//- }}
