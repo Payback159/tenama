@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Payback159/tenama/handlers"
@@ -24,6 +25,7 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+// It opens a file, decodes the YAML into a struct, and returns the struct
 func newConfig(configPath string) (*models.Config, error) {
 	config := &models.Config{}
 
@@ -40,6 +42,7 @@ func newConfig(configPath string) (*models.Config, error) {
 	return config, nil
 }
 
+// It returns a list of namespaces that have the label `created-by=tenama`
 func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error) {
 	nl, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
 		LabelSelector: "created-by=tenama",
@@ -47,7 +50,12 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 	return nl, err
 }
 
-func cleanupNamespaces(clientset *kubernetes.Clientset, pre string, interval string) {
+// It checks if there are namespaces with the prefix defined in the config file and if the expiration
+// date of the namespace is further in the future than the creation date. If the expiration date is
+// further in the future than the creation date, it checks if the current date exceeds the expiration
+// date. If the current date exceeds the expiration date, the namespace is deleted
+func cleanupNamespaces(wg *sync.WaitGroup, clientset *kubernetes.Clientset, pre string, interval string) {
+	defer wg.Done()
 	cleanupInterval, _ := time.ParseDuration(interval)
 	for {
 		log.Infof("Check if expired namespaces with the prefix %s exist", pre)
@@ -182,8 +190,10 @@ func main() {
 	// GetNamespaceByName - Find namespace by name
 	ag.GET("/:namespace", c.GetNamespaceByName)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	// start namespace cleanup logic
-	go cleanupNamespaces(clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
+	go cleanupNamespaces(&wg, clientset, cfg.Namespace.Prefix, cfg.CleanupInterval)
 
 	e.GET("/info", c.GetBuildInfo)
 	e.GET("/healthz", c.LivenessProbe)
@@ -191,4 +201,5 @@ func main() {
 
 	// Start server
 	e.Logger.Fatal(e.Start(":8080"))
+	wg.Wait()
 }
