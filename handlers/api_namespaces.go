@@ -509,17 +509,32 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 
 	ns.Duration = fmt.Sprint(namespaceDuration)
 
+	podSecurityStandardVersion, err := getK8sServerVersion(c.clientset)
+	if err != nil {
+		log.Warnf("Error getting kubernetes server version: %s", err)
+	}
+
 	nsSpec := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nsn,
 			Labels: map[string]string{
-				"created-by":                "tenama",
-				"tenama/namespace-duration": ns.Duration,
+				"created-by":                                 "tenama",
+				"tenama/namespace-duration":                  ns.Duration,
+				"pod-security.kubernetes.io/enforce":         "baseline",
+				"pod-security.kubernetes.io/enforce-version": podSecurityStandardVersion,
 			},
 		},
 	}
 
 	return nsSpec, err
+}
+
+func getK8sServerVersion(clientset *kubernetes.Clientset) (string, error) {
+	information, err := clientset.Discovery().ServerVersion()
+	if err != nil {
+		return "latest", err
+	}
+	return "v" + information.Major + "." + information.Minor, nil
 }
 
 func existsNamespace(namespaceList *v1.NamespaceList, namespace string) bool {
