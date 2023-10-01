@@ -25,3 +25,6 @@
 main.go
 Dockerfile
 go.mod
+handlers/api_namespaces.go
+handlers/container.go
+handlers/api_documentation.go

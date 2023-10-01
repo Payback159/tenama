@@ -203,7 +203,7 @@ func (c *Container) GetNamespaces(ctx echo.Context) error {
 		nsList = append(nsList, ns.ObjectMeta.Name)
 	}
 
-	successResponse := models.Response{
+	successResponse := models.GetNamespaces200Response{
 		Message:    "Namespaces successfully retrieved",
 		Namespaces: nsList,
 	}
