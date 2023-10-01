@@ -1,10 +1,9 @@
 package handlers
 
-// liveness and readiness probes for kubernetes
-
 import (
 	"net/http"
 
+	"github.com/Payback159/tenama/models"
 	"github.com/labstack/echo/v4"
 )
 
@@ -13,9 +12,9 @@ var builddate = "unknown"
 var commit = "unknown"
 
 func (c *Container) GetBuildInfo(e echo.Context) error {
-	return e.JSON(http.StatusOK, map[string]string{
-		"version":   version,
-		"buildDate": builddate,
-		"commit":    commit,
+	return e.JSON(http.StatusOK, models.GetInfo200Response{
+		Version:   version,
+		BuildDate: builddate,
+		Commit:    commit,
 	})
 }

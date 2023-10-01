@@ -1,10 +1,10 @@
-openapi: 3.0.1
+openapi: 3.1.0
 info:
   contact:
     url: https://github.com/Payback159/tenama/issues/new
   description: "Tenama provides a simple REST API to enable non-cluster-admins to\
-    \ create temporary namespaces. tenama takes care of the creation, management\
-    \ and cleanup of the temporary namespaces."
+    \ create temporary namespaces. tenama takes care of the creation, management and\
+    \ cleanup of the temporary namespaces."
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
@@ -28,18 +28,7 @@ paths:
           content:
             application/json:
               schema:
-                example:
-                  version: 0.3.0
-                  buildDate: "2020-05-01T12:00:00Z"
-                  commit: 1234567890abcdef
-                properties:
-                  buildDate:
-                    type: string
-                  commit:
-                    type: string
-                  version:
-                    type: string
-                type: object
+                $ref: '#/components/schemas/getInfo_200_response'
           description: successful operation
       summary: Returns information about the running tenama instance
       tags:
@@ -72,23 +61,14 @@ paths:
           content:
             application/json:
               schema:
-                example:
-                  message: "Namespace successfully found"
-                  namespaces: []
-                properties:
-                  message:
-                    type: string
-                  namespaces:
-                    items:
-                      type: string
-                    type: array
+                $ref: '#/components/schemas/getNamespaces_200_response'
           description: successful operation
         "500":
           content:
             application/json:
               schema:
+                example: "{\"message\":\"Error getting namespaces\"}"
                 type: string
-                example: {message: "Error getting namespaces"}
           description: Internal Server Error
       security:
       - basicAuth: []
@@ -106,11 +86,11 @@ paths:
         required: true
       responses:
         "200":
-          description: successful operation
           content:
             application/json:
               schema:
                 type: string
+          description: successful operation
         "401":
           description: Authentication information is missing or invalid
           headers:
@@ -125,8 +105,8 @@ paths:
           content:
             application/json:
               schema:
+                example: "{\"message\":\"Internal Server Error\"}"
                 type: string
-                example: {message: "Internal Server Error"}
           description: Internal Server Error
       security:
       - basicAuth: []
@@ -135,6 +115,62 @@ paths:
       - Namespaces
       x-codegen-request-body-name: body
   /namespace/{namespace}:
+    delete:
+      operationId: deleteNamespace
+      parameters:
+      - description: Namespace to delete
+        explode: false
+        in: path
+        name: namespace
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                example: "{\"message\":\"Namespace successfully deleted\"}"
+                type: string
+          description: successful operation
+        "400":
+          content: {}
+          description: Invalid Namespace supplied
+        "401":
+          description: Authentication information is missing or invalid
+          headers:
+            WWW_Authenticate:
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "403":
+          content:
+            application/json:
+              schema:
+                example: "{\"message\":\"Forbidden\"}"
+                type: string
+          description: The user is not authorized to perform this operation
+        "404":
+          content:
+            application/json:
+              schema:
+                example: "{\"message\":\"Namespace not found\"}"
+                type: string
+          description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                example: "{\"message\":\"Internal Server Error\"}"
+                type: string
+          description: Internal Server Error
+      security:
+      - basicAuth: []
+      summary: Deletes a namespace
+      tags:
+      - Namespaces
     get:
       description: Returns a single namespace
       operationId: getNamespace
@@ -152,8 +188,8 @@ paths:
           content:
             application/json:
               schema:
+                example: "{\"message\":\"Namespace successfully found\"}"
                 type: string
-                example: {message: "Namespace successfully found"}
           description: successful operation
         "400":
           content: {}
@@ -167,12 +203,12 @@ paths:
                 type: string
               style: simple
         "403":
-          description: The user is not authorized to perform this operation
           content:
             application/json:
               schema:
+                example: "{\"message\":\"Forbidden\"}"
                 type: string
-                example: {message: "Forbidden"}
+          description: The user is not authorized to perform this operation
         "404":
           content: {}
           description: Namespace not found
@@ -180,68 +216,12 @@ paths:
           content:
             application/json:
               schema:
+                example: "{\"message\":\"Internal Server Error\"}"
                 type: string
-                example: {message: "Internal Server Error"}
           description: Internal Server Error
       security:
       - basicAuth: []
       summary: Get namespace by name
-      tags:
-      - Namespaces
-    delete:
-      operationId: deleteNamespace
-      parameters:
-      - description: Namespace to delete
-        explode: false
-        in: path
-        name: namespace
-        required: true
-        schema:
-          type: string
-        style: simple
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Namespace successfully deleted"}
-          description: successful operation
-        "400":
-          content: {}
-          description: Invalid Namespace supplied
-        "401":
-          description: Authentication information is missing or invalid
-          headers:
-            WWW_Authenticate:
-              explode: false
-              schema:
-                type: string
-              style: simple
-        "403":
-          description: The user is not authorized to perform this operation
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Forbidden"}
-        "404":
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Namespace not found"}
-          description: Namespace not found
-        "500":
-          content:
-            application/json:
-              schema:
-                type: string
-                example: {message: "Internal Server Error"}
-          description: Internal Server Error
-      security:
-      - basicAuth: []
-      summary: Deletes a namespace
       tags:
       - Namespaces
 components:
@@ -260,7 +240,8 @@ components:
         duration: 24h
         infix: infix
         suffix: suffix
-        users: ["firstname.lastname@example.com"]
+        users:
+        - firstname.lastname@example.com
       properties:
         infix:
           type: string
@@ -278,6 +259,30 @@ components:
       type: object
       xml:
         name: Namespace
+    getInfo_200_response:
+      example:
+        version: 0.3.0
+        buildDate: 2020-05-01T12:00:00Z
+        commit: 1234567890abcdef
+      properties:
+        buildDate:
+          type: string
+        commit:
+          type: string
+        version:
+          type: string
+      type: object
+    getNamespaces_200_response:
+      example:
+        message: Namespace successfully found
+        namespaces: []
+      properties:
+        message:
+          type: string
+        namespaces:
+          items:
+            type: string
+          type: array
   securitySchemes:
     basicAuth:
       scheme: basic
