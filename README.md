@@ -19,4 +19,3 @@ nerdctl run --rm -p 8080:8080 -v ./config.yaml:config.yaml tenama
 
 [<img src="./.docs/diagramms/cleanupNamespaces.png">]()
 
-test
