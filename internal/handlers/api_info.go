@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/Payback159/tenama/models"
+	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
 )
 

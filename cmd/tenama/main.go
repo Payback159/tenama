@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Payback159/tenama/handlers"
-	"github.com/Payback159/tenama/models"
+	"github.com/Payback159/tenama/internal/handlers"
+	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -139,8 +139,10 @@ func main() {
 	var config *rest.Config
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+		log.Debugf("Using kubeconfig file: %s", *kubeconfig)
 	} else {
 		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+		log.Debugf("Using in cluster configuration")
 	}
 	flag.Parse()
 
@@ -176,8 +178,8 @@ func main() {
 	ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
 
 	// GetVersion - Outputs the version of tenama
-	e.Static("/docs", ".docs/swagger/")
-	e.Static("/", ".docs/swagger/")
+	e.Static("/docs", "web/swagger/")
+	e.Static("/", "web/swagger/")
 
 	// CreateNamespace - Create a new namespace
 	ag.POST("", c.CreateNamespace)

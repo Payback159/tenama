@@ -1,6 +1,0 @@
-.docs/api/openapi.yaml
-README.md
-models/hello-world.go
-models/model_get_info_200_response.go
-models/model_get_namespaces_200_response.go
-models/model_namespace.go

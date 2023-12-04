@@ -8,7 +8,7 @@ Tenama provides a simple REST API that allows non-cluster administrators in a sh
 
 ```bash
 nerdctl build . -t tenama
-nerdctl run --rm -p 8080:8080 -v ./config.yaml:config.yaml tenama
+nerdctl run --rm -p 8080:8080 -v $(pwd)/config/config.yaml:/config/config.yaml tenama
 ```
 
 ## Create Namespace Sequence-Diagram
