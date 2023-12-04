@@ -13,9 +13,9 @@ nerdctl run --rm -p 8080:8080 -v $(pwd)/config/config.yaml:/config/config.yaml t
 
 ## Create Namespace Sequence-Diagram
 
-[<img src="./.docs/diagramms/createNamespaceSeq.png">]()
+[<img src="./docs/diagramms/createNamespaceSeq.png">]()
 
 ## Cleanup Namespaces Sequence-Diagram
 
-[<img src="./.docs/diagramms/cleanupNamespaces.png">]()
+[<img src="./docs/diagramms/cleanupNamespaces.png">]()
 
