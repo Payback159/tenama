@@ -1,7 +1,5 @@
-logLevel: info
+logLevel: debug
 cleanupInterval: 10m
-kubernetes:
-  clusterEndpoint: https://127.0.0.1/ # publicURL to the Kubernetes API
 namespace:
   prefix: "tenama"
   suffix: "" # if not set tenama will use a random string instead

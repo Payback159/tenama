@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Payback159/tenama/models"
+	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 	v1 "k8s.io/api/core/v1"
@@ -292,7 +292,7 @@ func (c *Container) GetKubeconfig(namespace string, secret *v1.Secret, ctx echo.
 func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clientcmdapi.Config, error) {
 	clusterName := "default"
 	// get cluster endpoint
-	clusterEndpoint := c.config.Kubernetes.ClusterEndpoint
+	clusterEndpoint := c.clientset.CoreV1().RESTClient().Get().URL().Host
 	// get cluster certificate authority data
 	clusterCertificateAuthorityData := secret.Data["ca.crt"]
 	// get service account token
@@ -641,6 +641,11 @@ func chompBeginningCharacter(runearr []rune, runechar rune) []rune {
 	return chompedRune
 }
 
+// chompEndingCharacter removes the ending character from the given rune array recursively.
+// If the rune array is empty, it returns an empty rune array.
+// If the last element of the rune array is equal to the specified rune character,
+// it recursively removes the last element until it finds a different character.
+// It returns the modified rune array.
 func chompEndingCharacter(runearr []rune, runechar rune) []rune {
 	if len(runearr) == 0 {
 		return []rune{}
@@ -652,6 +657,8 @@ func chompEndingCharacter(runearr []rune, runechar rune) []rune {
 	return runearr
 }
 
+// StringWithCharset generates a random string of the specified length using the characters from the given charset.
+// It returns the generated random string.
 func StringWithCharset(length int, charset string) string {
 	randombytes := make([]byte, length)
 	for i := range randombytes {

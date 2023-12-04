@@ -3,7 +3,7 @@ package handlers
 import (
 	"crypto/subtle"
 
-	"github.com/Payback159/tenama/models"
+	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/gommon/log"
 )

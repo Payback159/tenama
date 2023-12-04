@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/Payback159/tenama/models"
+	"github.com/Payback159/tenama/internal/models"
 	"k8s.io/client-go/kubernetes"
 )
 
