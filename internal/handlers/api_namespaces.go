@@ -384,22 +384,40 @@ func createRolebinding(clientset *kubernetes.Clientset, rb *rbacv1.RoleBinding, 
 	return rb, err
 }
 
+// Checks if resource values are set in the config file and
+// crafts a ResourceQuota for the namespace
 func (c *Container) craftNamespaceQuotaSpecification(namespace string) *v1.ResourceQuota {
-	return &v1.ResourceQuota{
+	log.Debugf("crafting quota for the namespace %s", namespace)
+
+	quota := &v1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.config.Namespace.Prefix + separationString + "quota",
 			Namespace: namespace,
 		},
-		Spec: v1.ResourceQuotaSpec{
-			Hard: v1.ResourceList{
-				v1.ResourceLimitsCPU:       resource.MustParse(c.config.Namespace.Resources.Limits.CPU),
-				v1.ResourceLimitsMemory:    resource.MustParse(c.config.Namespace.Resources.Limits.Memory),
-				v1.ResourceRequestsCPU:     resource.MustParse(c.config.Namespace.Resources.Requests.CPU),
-				v1.ResourceRequestsMemory:  resource.MustParse(c.config.Namespace.Resources.Requests.Memory),
-				v1.ResourceRequestsStorage: resource.MustParse(c.config.Namespace.Resources.Requests.Storage),
-			},
-		},
+		Spec: v1.ResourceQuotaSpec{},
 	}
+
+	// check if resource.values are set in the config file
+	// based on the set values, craft a ResourceQuota for the namespace
+	// not set values should be omitted
+	namespaceResourceCPULimits, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.CPU)
+	if err == nil {
+		quota.Spec.Hard[v1.ResourceLimitsCPU] = namespaceResourceCPULimits
+	}
+	namespaceResourceMemoryLimits, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.Memory)
+	if err == nil {
+		quota.Spec.Hard[v1.ResourceLimitsMemory] = namespaceResourceMemoryLimits
+	}
+	namespaceResourceCPURequests, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.CPU)
+	if err == nil {
+		quota.Spec.Hard[v1.ResourceRequestsCPU] = namespaceResourceCPURequests
+	}
+	namespaceResourceMemoryRequests, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.Memory)
+	if err == nil {
+		quota.Spec.Hard[v1.ResourceRequestsMemory] = namespaceResourceMemoryRequests
+	}
+
+	return quota
 }
 
 // craft ServiceAccount to give access to the newly generated namespace
