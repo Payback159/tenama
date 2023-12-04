@@ -23,7 +23,7 @@ spec:
         app: tenama
     spec:
       containers:
-      - image: ghcr.io/payback159/tenama:main
+      - image: ghcr.io/payback159/tenama:104
         imagePullPolicy: Always
         name: tenama
         resources:

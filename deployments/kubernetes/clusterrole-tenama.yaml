@@ -24,3 +24,15 @@ rules:
   - edit
   verbs:
   - bind
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - create
