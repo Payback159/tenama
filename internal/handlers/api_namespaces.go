@@ -394,27 +394,40 @@ func (c *Container) craftNamespaceQuotaSpecification(namespace string) *v1.Resou
 			Name:      c.config.Namespace.Prefix + separationString + "quota",
 			Namespace: namespace,
 		},
-		Spec: v1.ResourceQuotaSpec{},
+		Spec: v1.ResourceQuotaSpec{
+			Hard: make(v1.ResourceList),
+		},
 	}
 
-	// check if resource.values are set in the config file
-	// based on the set values, craft a ResourceQuota for the namespace
-	// not set values should be omitted
-	namespaceResourceCPULimits, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.CPU)
-	if err == nil {
-		quota.Spec.Hard[v1.ResourceLimitsCPU] = namespaceResourceCPULimits
+	if c.config.Namespace.Resources.Limits.CPU != "" {
+		namespaceResourcesCPULimit, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.CPU)
+		if err == nil {
+			quota.Spec.Hard[v1.ResourceLimitsCPU] = namespaceResourcesCPULimit
+		}
 	}
-	namespaceResourceMemoryLimits, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.Memory)
-	if err == nil {
-		quota.Spec.Hard[v1.ResourceLimitsMemory] = namespaceResourceMemoryLimits
+	if c.config.Namespace.Resources.Limits.Memory != "" {
+		namespaceResourcesMemoryLimit, err := resource.ParseQuantity(c.config.Namespace.Resources.Limits.Memory)
+		if err == nil {
+			quota.Spec.Hard[v1.ResourceLimitsMemory] = namespaceResourcesMemoryLimit
+		}
 	}
-	namespaceResourceCPURequests, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.CPU)
-	if err == nil {
-		quota.Spec.Hard[v1.ResourceRequestsCPU] = namespaceResourceCPURequests
+	if c.config.Namespace.Resources.Requests.CPU != "" {
+		namespaceResourcesCPURequest, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.CPU)
+		if err == nil {
+			quota.Spec.Hard[v1.ResourceRequestsCPU] = namespaceResourcesCPURequest
+		}
 	}
-	namespaceResourceMemoryRequests, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.Memory)
-	if err == nil {
-		quota.Spec.Hard[v1.ResourceRequestsMemory] = namespaceResourceMemoryRequests
+	if c.config.Namespace.Resources.Requests.Memory != "" {
+		namespaceResourcesMemoryRequest, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.Memory)
+		if err == nil {
+			quota.Spec.Hard[v1.ResourceRequestsMemory] = namespaceResourcesMemoryRequest
+		}
+	}
+	if c.config.Namespace.Resources.Requests.Storage != "" {
+		namespaceResourcesStorageRequest, err := resource.ParseQuantity(c.config.Namespace.Resources.Requests.Storage)
+		if err == nil {
+			quota.Spec.Hard[v1.ResourceRequestsStorage] = namespaceResourcesStorageRequest
+		}
 	}
 
 	return quota
