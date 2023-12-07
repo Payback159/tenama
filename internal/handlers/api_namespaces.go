@@ -396,7 +396,7 @@ func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clients
 	}
 	//loop until secret has a data field with a token in it
 	// or until timeout is reached (10 seconds) and then return it
-	// or error if timeout is reached before token is created in secret data field (should not happen)
+	// or error if timeout is reached before token is created in secret data field
 	timeout := time.After(10 * time.Second)
 	//use ticker to check every 500ms if secret has token in data field
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -404,11 +404,13 @@ func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clients
 		select {
 		case <-timeout:
 			log.Errorf("timeout reached before token was created in secret data field")
+			c.sendErrorResponse(ctx, ns, "timeout reached before token was created in secret data field", http.StatusInternalServerError)
 		case <-ticker.C:
 			secret, err := clientset.CoreV1().Secrets(ns).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil {
 				log.Errorf("Error getting secret: %s", err)
 				c.sendErrorResponse(ctx, ns, "Error getting ServiceAccount secret", http.StatusInternalServerError)
+				return nil
 			}
 			if secret.Data["token"] != nil {
 				return secret
