@@ -102,7 +102,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 		return ctx.JSON(http.StatusOK, response)
 
 	}
-	c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Namespace already exists", http.StatusConflict)
+	return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Namespace already exists", http.StatusConflict)
 }
 
 // DeleteNamespace - Deletes a namespace
@@ -172,7 +172,7 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusNotFound)
 	}
 
-	c.sendErrorResponse(ctx, namespace, "Namespace successfully found", http.StatusOK)
+	return c.sendErrorResponse(ctx, namespace, "Namespace successfully found", http.StatusOK)
 }
 
 // convertKubeconfigToYaml
