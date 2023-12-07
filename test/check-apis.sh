@@ -5,7 +5,7 @@ set -e
 PREFIX=tenama
 INFIX=infix
 SUFFIX=suffix
-DURATION=1h
+DURATION=1m
 USERS=mustermann
 NSN=${PREFIX}-${INFIX}-${SUFFIX}
 
