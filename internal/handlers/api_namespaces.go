@@ -410,7 +410,6 @@ func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clients
 			if err != nil {
 				log.Errorf("Error getting secret: %s", err)
 				c.sendErrorResponse(ctx, ns, "Error getting ServiceAccount secret", http.StatusInternalServerError)
-				return nil
 			}
 			if secret.Data["token"] != nil {
 				return secret
