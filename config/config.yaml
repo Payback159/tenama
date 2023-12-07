@@ -9,9 +9,9 @@ namespace:
       cpu: "1000m"
       memory: "1Gi"
       storage: "1Gi"
-    limits:
-      cpu: "1000m"
-      memory: "1Gi"
+#    limits:
+#      cpu: "1000m"
+#      memory: "1Gi"
 
 basicAuth:
   - username: user1

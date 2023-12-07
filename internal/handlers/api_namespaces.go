@@ -32,112 +32,69 @@ const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // generic parser for json requests with echo context and return a models.Namespace struct
-func parseNamespaceRequest(ctx echo.Context) (models.Namespace, error) {
+func (c *Container) parseNamespaceRequest(ctx echo.Context) models.Namespace {
 	ns := models.Namespace{}
 	if err := ctx.Bind(&ns); err != nil {
-		return ns, err
+		log.Errorf("Error parsing namespace request: %s", err)
+		c.sendErrorResponse(ctx, "", "Error parsing namespace request", http.StatusBadRequest)
 	}
-	return ns, nil
+	return ns
 }
 
 // parses different errors from kubernetes and returns a custom error message
-func NamespaceErrorHandler(ctx echo.Context, err error) error {
+func (c *Container) NamespaceErrorHandler(ctx echo.Context, err error) error {
 	if strings.Contains(err.Error(), "must be no more than 63 characters") {
-		errorResponse := models.Response{
-			Message: "Namespace name must be no more than 63 characters",
-		}
-		return ctx.JSON(http.StatusBadRequest, errorResponse)
+		c.sendErrorResponse(ctx, "", "Namespace name must be no more than 63 characters", http.StatusBadRequest)
 	}
 
-	errorResponse := models.Response{
-		Message: "Error creating namespace",
+	return c.sendErrorResponse(ctx, "", "Error creating namespace", http.StatusInternalServerError)
+}
+
+func (c *Container) send200Reponse(ctx echo.Context, namespace string, message string) error {
+	response := models.PostNamespace200Response{
+		Message:   message,
+		Namespace: namespace,
 	}
-	return ctx.JSON(http.StatusInternalServerError, errorResponse)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+func (c *Container) sendErrorResponse(ctx echo.Context, namespace string, message string, status int) error {
+	response := models.PostNamespaceErrorResponse{
+		Message:   message,
+		Namespace: namespace,
+	}
+	return ctx.JSON(status, response)
 }
 
 // CreateNamespace - Create a new namespace
-// TODO: reduce complexity
 func (c *Container) CreateNamespace(ctx echo.Context) error {
 	namespaceList, _ := getNamespaceList(c.clientset)
-	ns, _ := parseNamespaceRequest(ctx)
+	ns := c.parseNamespaceRequest(ctx)
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
-		_, err := createNamespace(c.clientset, nsSpec, namespaceList)
-		if err != nil {
-			return NamespaceErrorHandler(ctx, err)
-		}
-		// create rolebinding for tenama service account
+		// create namespace
+		c.createNamespace(ctx, c.clientset, nsSpec, namespaceList)
+
 		trb := c.craftTenamaRoleBinding(nsSpec.ObjectMeta.Name, "tenama")
-		_, err = createRolebinding(c.clientset, trb, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating rolebinding: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating rolebinding",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
+		c.createRolebinding(ctx, c.clientset, trb, nsSpec.ObjectMeta.Name)
+
 		quotaSpec := c.craftNamespaceQuotaSpecification(nsSpec.ObjectMeta.Name)
-		_, err = createNamespaceQuota(c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating namespace quota: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating namespace quota",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
+		c.createNamespaceQuota(ctx, c.clientset, quotaSpec, nsSpec.ObjectMeta.Name)
+
 		serviceAccountSpec := c.craftServiceAccountSpecification(nsSpec.ObjectMeta.Name)
-		_, err = c.createServiceAccount(c.clientset, serviceAccountSpec, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating service account: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating service account",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
+		c.createServiceAccount(ctx, c.clientset, serviceAccountSpec, nsSpec.ObjectMeta.Name)
+
 		rbSpec, _ := c.craftUserRolebindings(nsSpec.ObjectMeta.Name, ns.Users, serviceAccountSpec.ObjectMeta.Name)
-		_, err = createRolebinding(c.clientset, rbSpec, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating rolebinding: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating rolebinding",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
+		c.createRolebinding(ctx, c.clientset, rbSpec, nsSpec.ObjectMeta.Name)
+
 		serviceAccountTokenSecret := c.craftServiceAccountTokenSecretSpecificationn(nsSpec.ObjectMeta.Name)
-		secret, err := c.createSecretForServiceAccountToken(c.clientset, serviceAccountTokenSecret, nsSpec.ObjectMeta.Name)
-		if err != nil {
-			log.Errorf("Error creating service account token secret: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error creating service account token secret",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
+		secret := c.createSecretForServiceAccountToken(ctx, c.clientset, serviceAccountTokenSecret, nsSpec.ObjectMeta.Name)
 
-		kubeconfig, err := c.GetKubeconfig(nsSpec.ObjectMeta.Name, secret, ctx)
-		if err != nil {
-			errorResponse := models.Response{
-				Message:   "Error creating kubeconfig",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
-
+		kubeconfig := c.GetKubeconfig(ctx, nsSpec.ObjectMeta.Name, secret)
 		//convert kubeconfig to valide yaml configuration and return it as yaml response
-		kubeconfigYaml, err := convertKubeconfigToYaml(kubeconfig)
-		if err != nil {
-			log.Errorf("Error converting kubeconfig to yaml: %s", err)
-			errorResponse := models.Response{
-				Message:   "Error converting kubeconfig to yaml",
-				Namespace: nsSpec.ObjectMeta.Name,
-			}
-			return ctx.JSON(http.StatusInternalServerError, errorResponse)
-		}
-		response := models.Response{
+		kubeconfigYaml := c.convertKubeconfigToYaml(ctx, nsSpec.ObjectMeta.Name, kubeconfig)
+
+		response := models.PostNamespace200Response{
 			Message:    "Namespace created",
 			Namespace:  nsSpec.ObjectMeta.Name,
 			KubeConfig: kubeconfigYaml,
@@ -145,11 +102,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 		return ctx.JSON(http.StatusOK, response)
 
 	}
-	errorResponse := models.Response{
-		Message:   "Namespace already exists",
-		Namespace: nsSpec.ObjectMeta.Name,
-	}
-	return ctx.JSON(http.StatusConflict, errorResponse)
+	return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Namespace already exists", http.StatusConflict)
 }
 
 // DeleteNamespace - Deletes a namespace
@@ -159,29 +112,17 @@ func (c *Container) DeleteNamespace(ctx echo.Context) error {
 
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
 		log.Infof("Namespace %s does not start with prefix %s", namespace, c.config.Namespace.Prefix)
-		errorResponse := models.Response{
-			Message:   "Namespace does not start with prefix " + c.config.Namespace.Prefix,
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusBadRequest, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Namespace does not start with prefix "+c.config.Namespace.Prefix, http.StatusBadRequest)
 	}
 
 	log.Infof("Delete namespace %s through an API call.", namespace)
 	err := c.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
 	if err != nil {
 		log.Errorf("Error deleting namespace: %s", err)
-		errorResponse := models.Response{
-			Message:   "Namespace not found",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusNotFound, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusInternalServerError)
 	}
 
-	successResponse := models.Response{
-		Message:   "Namespace successfully deleted",
-		Namespace: namespace,
-	}
-	return ctx.JSON(http.StatusOK, successResponse)
+	return c.sendErrorResponse(ctx, namespace, "Namespace successfully deleted", http.StatusOK)
 }
 
 // GetNamespaces - Get all namespaces
@@ -191,10 +132,7 @@ func (c *Container) GetNamespaces(ctx echo.Context) error {
 	})
 	if err != nil {
 		log.Errorf("Error getting namespaces: %s", err)
-		errorResponse := models.Response{
-			Message: "Error getting namespaces",
-		}
-		return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		c.sendErrorResponse(ctx, "", "Error getting namespaces", http.StatusInternalServerError)
 	}
 
 	// convert namespaces to a list of strings
@@ -219,77 +157,55 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 	//Check if namespace is valid and starts with the prefix from the config file (e.g. tenama)
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
 		log.Warnf("SearchingNamespace %s is invalid", namespace)
-
-		errorResponse := models.Response{
-			Message:   "Namespace is invalid",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusBadRequest, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Namespace is invalid", http.StatusBadRequest)
 	}
 
 	ns, err := c.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if err != nil {
 		log.Errorf("Error getting namespace: %s", err)
-		errorResponse := models.Response{
-			Message:   "Namespace not found",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusInternalServerError, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusInternalServerError)
 	}
 
 	//check if namespace is found
 	if ns == nil {
 		log.Warnf("Namespace %s not found", namespace)
-		errorResponse := models.Response{
-			Message:   "Namespace not found",
-			Namespace: namespace,
-		}
-		return ctx.JSON(http.StatusNotFound, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusNotFound)
 	}
 
-	successResponse := models.Response{
-		Message:   "Namespace successfully found",
-		Namespace: namespace,
-	}
-	return ctx.JSON(http.StatusOK, successResponse)
+	return c.sendErrorResponse(ctx, namespace, "Namespace successfully found", http.StatusOK)
 }
 
 // convertKubeconfigToYaml
-func convertKubeconfigToYaml(kubeconfig *clientcmdapi.Config) ([]byte, error) {
+func (c *Container) convertKubeconfigToYaml(ctx echo.Context, namespace string, kubeconfig *clientcmdapi.Config) []byte {
 	var kubeconfigYaml []byte
 	var err error
 	if kubeconfigYaml, err = clientcmd.Write(*kubeconfig); err != nil {
-		return nil, err
+		log.Errorf("Error converting kubeconfig to yaml: %s", err)
+		c.sendErrorResponse(ctx, namespace, "Error converting kubeconfig to yaml", http.StatusInternalServerError)
 	}
-	return kubeconfigYaml, nil
+	return kubeconfigYaml
 }
 
 // get secret name with service account token for a given namespace and generate a kubeconfigiuration
-func (c *Container) GetKubeconfig(namespace string, secret *v1.Secret, ctx echo.Context) (*clientcmdapi.Config, error) {
+func (c *Container) GetKubeconfig(ctx echo.Context, namespace string, secret *v1.Secret) *clientcmdapi.Config {
 	serviceAccountSecret, err := c.clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Errorf("Error getting service account token secret: %s", err)
-		errorResponse := models.Response{
-			Message:   "Error getting service account token secret",
-			Namespace: namespace,
-		}
-		return nil, ctx.JSON(http.StatusInternalServerError, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Error getting service account token secret", http.StatusInternalServerError)
+		return nil
 	}
-	kubeconfig, err := c.craftKubeconfig(namespace, serviceAccountSecret)
+	kubeconfig := c.craftKubeconfig(ctx, namespace, serviceAccountSecret)
 	if err != nil {
 		log.Errorf("Error crafting kubeconfig: %s", err)
-		errorResponse := models.Response{
-			Message:   "Error crafting kubeconfig",
-			Namespace: namespace,
-		}
-		return nil, ctx.JSON(http.StatusInternalServerError, errorResponse)
+		c.sendErrorResponse(ctx, namespace, "Error crafting kubeconfig", http.StatusInternalServerError)
+		return nil
 	}
-	return kubeconfig, nil
+	return kubeconfig
 }
 
 // get namespace and service account token secret name for a given namespace
 // craft a kubeconfig and return it
-func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clientcmdapi.Config, error) {
+func (c *Container) craftKubeconfig(ctx echo.Context, namespace string, secret *v1.Secret) *clientcmdapi.Config {
 	clusterName := "default"
 	// get cluster endpoint
 	clusterEndpoint := c.clientset.CoreV1().RESTClient().Get().URL().Host
@@ -322,7 +238,7 @@ func (c *Container) craftKubeconfig(namespace string, secret *v1.Secret) (*clien
 	// set current context
 	kubeconfig.CurrentContext = serviceAccountName
 
-	return kubeconfig, nil
+	return kubeconfig
 }
 
 // craft rolebinding for service account tenama from tenama-system namespace and bind clusterrole admin
@@ -378,10 +294,13 @@ func (c *Container) craftUserRolebindings(namespace string, users []string, serv
 	return rb, nil
 }
 
-func createRolebinding(clientset *kubernetes.Clientset, rb *rbacv1.RoleBinding, ns string) (*rbacv1.RoleBinding, error) {
+func (c *Container) createRolebinding(ctx echo.Context, clientset *kubernetes.Clientset, rb *rbacv1.RoleBinding, ns string) {
 	log.Debugf("creating binding: %s for service account %s in namespace %s for users", rb.Name, rb.Subjects[:len(rb.Subjects)-1], ns)
 	rb, err := clientset.RbacV1().RoleBindings(ns).Create(context.TODO(), rb, metav1.CreateOptions{})
-	return rb, err
+	if err != nil {
+		log.Errorf("Error creating rolebinding: %s", err)
+		c.sendErrorResponse(ctx, ns, "Error creating rolebinding", http.StatusInternalServerError)
+	}
 }
 
 // Checks if resource values are set in the config file and
@@ -444,10 +363,13 @@ func (c *Container) craftServiceAccountSpecification(namespace string) *v1.Servi
 	}
 }
 
-func (c *Container) createServiceAccount(clientset *kubernetes.Clientset, sa *v1.ServiceAccount, ns string) (*v1.ServiceAccount, error) {
+func (c *Container) createServiceAccount(ctx echo.Context, clientset *kubernetes.Clientset, sa *v1.ServiceAccount, ns string) {
 	log.Debugf("creating ServiceAccount %s in namespace %s", sa.Name, ns)
 	sa, err := clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
-	return sa, err
+	if err != nil {
+		log.Errorf("Error creating service account: %s", err)
+		c.sendErrorResponse(ctx, ns, "Error creating service account", http.StatusInternalServerError)
+	}
 }
 
 // craft secret for service account token for the crafted ServiceAccount
@@ -463,40 +385,46 @@ func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace strin
 	}
 }
 
-func (c *Container) createSecretForServiceAccountToken(clientset *kubernetes.Clientset, secret *v1.Secret, ns string) (*v1.Secret, error) {
+func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clientset *kubernetes.Clientset, secret *v1.Secret, ns string) *v1.Secret {
 	log.Debugf("creating Secret %s in namespace %s", secret.Name, ns)
 	//Create Token Secret, wait for it to be created and then return it
 
 	secret, err := clientset.CoreV1().Secrets(ns).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
-		return nil, err
+		log.Errorf("Error creating secret: %s", err)
+		c.sendErrorResponse(ctx, ns, "Error creating ServiceAccount secret", http.StatusInternalServerError)
 	}
 	//loop until secret has a data field with a token in it
 	// or until timeout is reached (10 seconds) and then return it
-	// or error if timeout is reached before token is created in secret data field (should not happen)
+	// or error if timeout is reached before token is created in secret data field
 	timeout := time.After(10 * time.Second)
 	//use ticker to check every 500ms if secret has token in data field
 	ticker := time.NewTicker(500 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:
-			return nil, errors.New("timeout reached before token was created in secret data field")
+			log.Errorf("timeout reached before token was created in secret data field")
+			c.sendErrorResponse(ctx, ns, "timeout reached before token was created in secret data field", http.StatusInternalServerError)
 		case <-ticker.C:
 			secret, err := clientset.CoreV1().Secrets(ns).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil {
-				return nil, err
+				log.Errorf("Error getting secret: %s", err)
+				c.sendErrorResponse(ctx, ns, "Error getting ServiceAccount secret", http.StatusInternalServerError)
 			}
 			if secret.Data["token"] != nil {
-				return secret, nil
+				return secret
 			}
 		}
 	}
 }
 
-func createNamespaceQuota(clientset *kubernetes.Clientset, quota *v1.ResourceQuota, ns string) (*v1.ResourceQuota, error) {
+func (c *Container) createNamespaceQuota(ctx echo.Context, clientset *kubernetes.Clientset, quota *v1.ResourceQuota, ns string) {
 	log.Debugf("creating quota %s in namespace %s", quota.Name, ns)
 	quota, err := clientset.CoreV1().ResourceQuotas(ns).Create(context.TODO(), quota, metav1.CreateOptions{})
-	return quota, err
+	if err != nil {
+		log.Errorf("Error creating namespace quota: %s", err)
+		c.sendErrorResponse(ctx, ns, "Error creating namespace quota", http.StatusInternalServerError)
+	}
 }
 
 func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.Context) (*v1.Namespace, error) {
@@ -531,11 +459,7 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 	namespaceDuration, err := time.ParseDuration(ns.Duration)
 	if err != nil {
 		log.Warnf("Error parsing duration: %s", ns.Duration)
-		errorResponse := models.Response{
-			Message:   "Error parsing duration",
-			Namespace: nsn,
-		}
-		return nil, ctx.JSON(http.StatusBadRequest, errorResponse)
+		c.sendErrorResponse(ctx, nsn, "Error parsing duration", http.StatusBadRequest)
 	}
 
 	ns.Duration = fmt.Sprint(namespaceDuration)
@@ -591,19 +515,17 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 	return nl, err
 }
 
-func createNamespace(clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) (*v1.Namespace, error) {
+func (c *Container) createNamespace(ctx echo.Context, clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) {
 	log.Infof("Considering to create namespace %s", nsSpec.Name)
 	if !existsNamespaceWithPrefix(namespaceList, nsSpec.Name) {
-		ns, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
+		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
 			log.Errorf("Error creating namespace %s: %s", nsSpec.Name, err)
-			return nil, err
+			c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Error creating namespace", http.StatusInternalServerError)
 		}
 		log.Infof("Created Namespace %s", nsSpec.Name)
-		return ns, nil
 	}
-	log.Infof("Namespace matching %s already exists!", nsSpec.Name)
-	return nsSpec, nil
+	log.Warnf("Namespace matching %s already exists!", nsSpec.Name)
 }
 
 // replaces k8s invalid chars (separationRune) in inputString

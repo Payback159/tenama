@@ -149,6 +149,7 @@ func main() {
 	//use the current context in kubeconfig
 	config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
+		log.Debugf("Could not read kubeconfig file: %s", err)
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			log.Fatalf("Could not read k8s cluster configuration: %s", err)

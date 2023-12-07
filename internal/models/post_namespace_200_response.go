@@ -1,6 +1,6 @@
 package models
 
-type Response struct {
+type PostNamespace200Response struct {
 	Message    string   `json:"message"`
 	Namespace  string   `json:"namespace,omitempty"`
 	Namespaces []string `json:"namespaces,omitempty"`
