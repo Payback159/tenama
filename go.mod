@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/labstack/echo/v4 v4.11.4
-	k8s.io/apimachinery v0.28.4
+	k8s.io/apimachinery v0.29.1
 	k8s.io/client-go v0.28.4
 )
 
