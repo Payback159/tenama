@@ -1,5 +1,5 @@
 # build stage
-# golang:1.21.4-bookworm
+# golang-bookworm
 FROM golang@sha256:7b297d9abee021bab9046e492506b3c2da8a3722cbf301653186545ecc1e00bb AS build-env
 
 ADD certs/ /usr/local/share/ca-certificates/
