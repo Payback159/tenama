@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -o tenama \
 
 # final stage
 
-FROM gcr.io/distroless/static@sha256:072d78bc452a2998929a9579464e55067db4bf6d2c5f9cde582e33c10a415bd1
+FROM gcr.io/distroless/static@sha256:046b92c933032a8ca99a66f4c79a68ac029d9a4ababd1a806a82140b3b899fd3
 ENV BUILDDIR=/build
 COPY --from=build-env $BUILDDIR/tenama /
 COPY --from=build-env $BUILDDIR/api /api
