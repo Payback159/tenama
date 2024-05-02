@@ -67,6 +67,7 @@ dockers:
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--platform=linux/arm64"
     extra_files:
+      - api/
       - web/
 docker_manifests:
   - name_template: "ghcr.io/payback159/tenama:v{{ .Version }}"
