@@ -16,7 +16,8 @@ before:
     #- go generate ./...
 
 builds:
-  - env:
+  - main: ./cmd/tenama
+    env:
       - CGO_ENABLED=0
     binary: tenama
     goos:
