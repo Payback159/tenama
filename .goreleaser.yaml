@@ -52,6 +52,7 @@ dockers:
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--platform=linux/amd64"
     extra_files:
+      - api/
       - web/
   - image_templates:
       - ghcr.io/payback159/tenama:v{{ .Version }}-arm64
