@@ -2,8 +2,8 @@ FROM gcr.io/distroless/static@sha256:41972110a1c1a5c0b6adb283e8aa092c43c31f7c5d7
 
 WORKDIR /app
 
-COPY tenama /app/
-COPY api/ /app/api/
-COPY web/ /app/web/
+COPY tenama /
+COPY api/ /api/
+COPY web/ /web/
 
 CMD ["/app/tenama"]
