@@ -3,7 +3,7 @@ module github.com/Payback159/tenama
 go 1.20
 
 require (
-	github.com/labstack/echo/v4 v4.13.0
+	github.com/labstack/echo/v4 v4.13.1
 	k8s.io/apimachinery v0.30.3
 	k8s.io/client-go v0.30.3
 )
