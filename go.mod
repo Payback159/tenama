@@ -31,7 +31,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
