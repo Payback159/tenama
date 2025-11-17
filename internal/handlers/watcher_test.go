@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,9 +40,9 @@ func TestHasPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := hasPrefix(tt.namespace, tt.prefix)
+			got := strings.HasPrefix(tt.namespace, tt.prefix)
 			if got != tt.want {
-				t.Errorf("hasPrefix(%s, %s) = %v, want %v", tt.namespace, tt.prefix, got, tt.want)
+				t.Errorf("strings.HasPrefix(%s, %s) = %v, want %v", tt.namespace, tt.prefix, got, tt.want)
 			}
 		})
 	}

@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/Payback159/tenama/internal/handlers"
 	"github.com/Payback159/tenama/internal/models"
@@ -138,6 +140,17 @@ func main() {
 	e.GET("/info", c.GetBuildInfo)
 	e.GET("/healthz", c.LivenessProbe)
 	e.GET("/readiness", c.ReadinessProbe)
+
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Info("Shutdown signal received, stopping namespace watcher...")
+		namespaceWatcher.Stop()
+		log.Info("Namespace watcher stopped, shutting down server...")
+		e.Shutdown(context.Background())
+	}()
 
 	// Start server
 	e.Logger.Fatal(e.Start(":8080"))

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,6 +116,12 @@ func (nw *NamespaceWatcher) watch(ctx context.Context) {
 				if nw.shouldProcess(ns) {
 					nw.schedule(ns)
 				}
+			case watch.Modified:
+				if nw.shouldProcess(ns) {
+					nw.schedule(ns)
+				} else {
+					nw.cancel(ns.Name)
+				}
 			case watch.Deleted:
 				nw.cancel(ns.Name)
 			}
@@ -128,7 +135,7 @@ func (nw *NamespaceWatcher) shouldProcess(ns *v1.Namespace) bool {
 		return false
 	}
 
-	if !hasPrefix(ns.Name, nw.prefix) {
+	if !strings.HasPrefix(ns.Name, nw.prefix) {
 		return false
 	}
 
@@ -212,15 +219,4 @@ func (nw *NamespaceWatcher) GetActiveTimerCount() int {
 	nw.mu.RLock()
 	defer nw.mu.RUnlock()
 	return len(nw.timers)
-}
-
-// hasPrefix checks if string has prefix
-func hasPrefix(s, prefix string) bool {
-	if prefix == "" {
-		return true
-	}
-	if len(s) < len(prefix) {
-		return false
-	}
-	return s[:len(prefix)] == prefix
 }
