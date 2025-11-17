@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Payback159/tenama/internal/handlers"
 	"github.com/Payback159/tenama/internal/models"
@@ -149,7 +150,9 @@ func main() {
 		log.Info("Shutdown signal received, stopping namespace watcher...")
 		namespaceWatcher.Stop()
 		log.Info("Namespace watcher stopped, shutting down server...")
-		e.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		e.Shutdown(shutdownCtx)
 	}()
 
 	// Start server
