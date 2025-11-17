@@ -13,8 +13,7 @@ func TestConfigUnmarshal(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				LogLevel:        "info",
-				CleanupInterval: "24h",
+				LogLevel: "info",
 			},
 			wantErr: false,
 		},
@@ -94,6 +93,55 @@ func TestBasicAuth(t *testing.T) {
 			}
 			if tt.wantUser && tt.auth[0].Username == "" {
 				t.Errorf("BasicAuth username should not be empty")
+			}
+		})
+	}
+}
+
+func TestGlobalLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		limits  GlobalLimits
+		wantErr bool
+	}{
+		{
+			name: "global limits disabled",
+			limits: GlobalLimits{
+				Enabled: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "global limits enabled with resources",
+			limits: GlobalLimits{
+				Enabled: true,
+				Resources: Resources{
+					Requests: struct {
+						CPU     string `yaml:"cpu"`
+						Memory  string `yaml:"memory"`
+						Storage string `yaml:"storage"`
+					}{
+						CPU:     "10",
+						Memory:  "100Gi",
+						Storage: "500Gi",
+					},
+					Limits: struct {
+						CPU    string `yaml:"cpu"`
+						Memory string `yaml:"memory"`
+					}{
+						CPU:    "20",
+						Memory: "200Gi",
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.limits.Enabled && tt.limits.Resources.Requests.CPU == "" {
+				t.Errorf("GlobalLimits should have CPU request set when enabled")
 			}
 		})
 	}

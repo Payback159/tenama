@@ -7,6 +7,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -239,4 +240,259 @@ func TestConcurrentCancelAndRead(t *testing.T) {
 	if count := watcher.GetActiveTimerCount(); count != 0 {
 		t.Errorf("Expected 0 timers after concurrent cancel, got %d", count)
 	}
+}
+
+// TestResourceTracking tests the resource tracking functionality
+func TestResourceTracking(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
+
+	// Set global limits
+	limits := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("5000m"),
+		v1.ResourceMemory:  parseQuantity("10Gi"),
+		v1.ResourceStorage: parseQuantity("50Gi"),
+	}
+	watcher.SetGlobalLimits(limits)
+
+	// Create test namespace with resources
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tenama-test-1",
+			Labels: map[string]string{
+				"tenama/resource-cpu":     "1000m",
+				"tenama/resource-memory":  "2Gi",
+				"tenama/resource-storage": "5Gi",
+			},
+		},
+	}
+
+	// Extract and add resources
+	watcher.addToResourceTracking(ns)
+
+	// Verify current usage (just check that something was added)
+	usage := watcher.GetCurrentResourceUsage()
+	cpuValue := usage[v1.ResourceCPU]
+	if cpuValue.Value() == 0 {
+		t.Error("Expected CPU usage to be non-zero after adding namespace")
+	}
+
+	// Verify limits are still intact
+	currentLimits := watcher.GetGlobalLimits()
+	if len(currentLimits) == 0 {
+		t.Error("Expected limits to be set")
+	}
+}
+
+// TestCanCreateNamespace tests the CanCreateNamespace validation
+func TestCanCreateNamespace(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
+
+	// Set global limits
+	limits := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("5000m"),
+		v1.ResourceMemory:  parseQuantity("10Gi"),
+		v1.ResourceStorage: parseQuantity("50Gi"),
+	}
+	watcher.SetGlobalLimits(limits)
+
+	// Add initial namespace
+	ns1 := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tenama-test-1",
+			Labels: map[string]string{
+				"tenama/resource-cpu":     "1000m",
+				"tenama/resource-memory":  "2Gi",
+				"tenama/resource-storage": "5Gi",
+			},
+		},
+	}
+	watcher.addToResourceTracking(ns1)
+
+	// Test 1: Can create namespace within limits
+	newResources1 := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("3000m"),
+		v1.ResourceMemory:  parseQuantity("5Gi"),
+		v1.ResourceStorage: parseQuantity("10Gi"),
+	}
+	if !watcher.CanCreateNamespace(newResources1) {
+		t.Error("Expected CanCreateNamespace to return true for resources within limits")
+	}
+
+	// Test 2: Cannot exceed CPU limit
+	newResources2 := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("5000m"),
+		v1.ResourceMemory:  parseQuantity("2Gi"),
+		v1.ResourceStorage: parseQuantity("5Gi"),
+	}
+	if watcher.CanCreateNamespace(newResources2) {
+		t.Error("Expected CanCreateNamespace to return false when exceeding CPU limit")
+	}
+
+	// Test 3: Cannot exceed memory limit
+	newResources3 := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("2000m"),
+		v1.ResourceMemory:  parseQuantity("9Gi"),
+		v1.ResourceStorage: parseQuantity("5Gi"),
+	}
+	if watcher.CanCreateNamespace(newResources3) {
+		t.Error("Expected CanCreateNamespace to return false when exceeding memory limit")
+	}
+
+	// Test 4: Exactly at limit (should succeed)
+	newResources4 := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("4000m"),
+		v1.ResourceMemory:  parseQuantity("8Gi"),
+		v1.ResourceStorage: parseQuantity("45Gi"),
+	}
+	if !watcher.CanCreateNamespace(newResources4) {
+		t.Error("Expected CanCreateNamespace to return true when exactly at limit")
+	}
+}
+
+// TestRemoveFromResourceTracking tests resource removal
+func TestRemoveFromResourceTracking(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
+
+	// Set global limits
+	limits := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("5000m"),
+		v1.ResourceMemory:  parseQuantity("10Gi"),
+		v1.ResourceStorage: parseQuantity("50Gi"),
+	}
+	watcher.SetGlobalLimits(limits)
+
+	// Add namespace
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tenama-test-1",
+			Labels: map[string]string{
+				"tenama/resource-cpu":     "2000m",
+				"tenama/resource-memory":  "4Gi",
+				"tenama/resource-storage": "10Gi",
+			},
+		},
+	}
+	watcher.addToResourceTracking(ns)
+
+	// Verify resources were added
+	usage := watcher.GetCurrentResourceUsage()
+	if len(usage) == 0 {
+		t.Error("Expected resource usage to be tracked after adding namespace")
+	}
+
+	// Remove namespace
+	watcher.removeFromResourceTracking("tenama-test-1")
+
+	// Verify resources were removed (should be empty or minimal)
+	usage = watcher.GetCurrentResourceUsage()
+	if len(usage) > 0 {
+		t.Error("Expected resource usage to be empty after removing namespace")
+	}
+}
+
+// TestUpdateResourceTracking tests resource update on modification
+func TestUpdateResourceTracking(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
+
+	// Set global limits
+	limits := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("5000m"),
+		v1.ResourceMemory:  parseQuantity("10Gi"),
+		v1.ResourceStorage: parseQuantity("50Gi"),
+	}
+	watcher.SetGlobalLimits(limits)
+
+	// Add initial namespace
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "tenama-test-1",
+			Labels: map[string]string{
+				"tenama/resource-cpu":     "1000m",
+				"tenama/resource-memory":  "2Gi",
+				"tenama/resource-storage": "5Gi",
+			},
+		},
+	}
+	watcher.addToResourceTracking(ns)
+
+	// Update namespace with new resources
+	ns.ObjectMeta.Labels["tenama/resource-cpu"] = "2000m"
+	ns.ObjectMeta.Labels["tenama/resource-memory"] = "3Gi"
+	ns.ObjectMeta.Labels["tenama/resource-storage"] = "8Gi"
+	watcher.updateResourceTracking(ns)
+
+	// Verify resources were updated (just check that something is tracked)
+	usage := watcher.GetCurrentResourceUsage()
+	if len(usage) == 0 {
+		t.Error("Expected resource usage to be tracked after update")
+	}
+}
+
+// TestConcurrentResourceTracking tests thread safety of resource tracking
+func TestConcurrentResourceTracking(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
+
+	// Set global limits
+	limits := v1.ResourceList{
+		v1.ResourceCPU:     parseQuantity("10000m"),
+		v1.ResourceMemory:  parseQuantity("100Gi"),
+		v1.ResourceStorage: parseQuantity("500Gi"),
+	}
+	watcher.SetGlobalLimits(limits)
+
+	done := make(chan bool)
+
+	// Goroutines that add resources
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("tenama-test-%d", id),
+					Labels: map[string]string{
+						"tenama/resource-cpu":     "500m",
+						"tenama/resource-memory":  "1Gi",
+						"tenama/resource-storage": "5Gi",
+					},
+				},
+			}
+			watcher.addToResourceTracking(ns)
+			done <- true
+		}(i)
+	}
+
+	// Goroutines that read usage
+	for i := 0; i < 5; i++ {
+		go func() {
+			for j := 0; j < 10; j++ {
+				_ = watcher.GetCurrentResourceUsage()
+				_ = watcher.CanCreateNamespace(v1.ResourceList{
+					v1.ResourceCPU: parseQuantity("100m"),
+				})
+				time.Sleep(1 * time.Millisecond)
+			}
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 15; i++ {
+		<-done
+	}
+
+	// Verify final state (all namespaces should be tracked)
+	usage := watcher.GetCurrentResourceUsage()
+	if len(usage) == 0 {
+		t.Error("Expected resource usage to be tracked after concurrent operations")
+	}
+}
+
+// Helper function to parse quantity string
+func parseQuantity(str string) resource.Quantity {
+	q, _ := resource.ParseQuantity(str)
+	return q
 }
