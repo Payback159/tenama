@@ -1,8 +1,9 @@
 package models
 
 type Config struct {
-	LogLevel string `yaml:"logLevel"`
-	Kubernetes struct {
+	LogLevel     string       `yaml:"logLevel"`
+	GlobalLimits GlobalLimits `yaml:"globalLimits"`
+	Kubernetes   struct {
 		ClusterEndpoint string `yaml:"clusterEndpoint"`
 	}
 	Namespace struct {
@@ -12,6 +13,12 @@ type Config struct {
 		Resources Resources `yaml:"resources"`
 	} `yaml:"namespace"`
 	BasicAuth BasicAuth `yaml:"basicAuth"`
+}
+
+// GlobalLimits defines cluster-wide resource constraints for all tenama-managed namespaces
+type GlobalLimits struct {
+	Enabled   bool      `yaml:"enabled"`
+	Resources Resources `yaml:"resources"`
 }
 
 type Resources struct {
