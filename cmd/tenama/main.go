@@ -18,6 +18,8 @@ import (
 	"github.com/labstack/gommon/log"
 	"gopkg.in/yaml.v2"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -39,6 +41,41 @@ func newConfig(configPath string) (*models.Config, error) {
 	}
 	defer file.Close()
 	return config, nil
+}
+
+// convertConfigResourcesToResourceList converts config Resources (with Requests/Limits) to v1.ResourceList
+func convertConfigResourcesToResourceList(res *models.Resources) (v1.ResourceList, error) {
+	if res == nil {
+		return v1.ResourceList{}, nil
+	}
+
+	rl := v1.ResourceList{}
+
+	if res.Requests.CPU != "" {
+		q, err := resource.ParseQuantity(res.Requests.CPU)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CPU quantity: %w", err)
+		}
+		rl[v1.ResourceCPU] = q
+	}
+
+	if res.Requests.Memory != "" {
+		q, err := resource.ParseQuantity(res.Requests.Memory)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Memory quantity: %w", err)
+		}
+		rl[v1.ResourceMemory] = q
+	}
+
+	if res.Requests.Storage != "" {
+		q, err := resource.ParseQuantity(res.Requests.Storage)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Storage quantity: %w", err)
+		}
+		rl[v1.ResourceStorage] = q
+	}
+
+	return rl, nil
 }
 
 func main() {
@@ -106,6 +143,31 @@ func main() {
 	}
 	c.SetBasicAuthUserList(cfg)
 
+	// Start event-based namespace watcher for lifecycle management
+	namespaceWatcher := handlers.NewNamespaceWatcher(clientset.CoreV1(), cfg.Namespace.Prefix)
+
+	// Configure global resource limits if enabled
+	log.Debugf("GlobalLimits config: Enabled=%v", cfg.GlobalLimits.Enabled)
+	if cfg.GlobalLimits.Enabled {
+		// Convert configured limits to v1.ResourceList
+		limitsResourceList, err := convertConfigResourcesToResourceList(&cfg.GlobalLimits.Resources)
+		if err != nil {
+			log.Fatalf("Failed to parse global resource limits: %s", err)
+		}
+		namespaceWatcher.SetGlobalLimits(limitsResourceList)
+		log.Infof("Global resource limits enabled: CPU=%v Memory=%v Storage=%v",
+			limitsResourceList[v1.ResourceCPU],
+			limitsResourceList[v1.ResourceMemory],
+			limitsResourceList[v1.ResourceStorage])
+	}
+
+	// Attach watcher to container for use in handlers
+	c.SetWatcher(namespaceWatcher)
+
+	if err := namespaceWatcher.Start(context.Background()); err != nil {
+		log.Fatalf("Failed to start namespace watcher: %s", err)
+	}
+
 	// create new echo instance and register authenticated group
 	e := echo.New()
 	e.HideBanner = true
@@ -131,12 +193,6 @@ func main() {
 	ag.GET("", c.GetNamespaces)
 	// GetNamespaceByName - Find namespace by name
 	ag.GET("/:namespace", c.GetNamespaceByName)
-
-	// Start event-based namespace watcher for lifecycle management
-	namespaceWatcher := handlers.NewNamespaceWatcher(clientset.CoreV1(), cfg.Namespace.Prefix)
-	if err := namespaceWatcher.Start(context.Background()); err != nil {
-		log.Errorf("Failed to start namespace watcher: %s", err)
-	}
 
 	e.GET("/info", c.GetBuildInfo)
 	e.GET("/healthz", c.LivenessProbe)

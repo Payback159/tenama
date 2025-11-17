@@ -9,6 +9,7 @@ import (
 type Container struct {
 	clientset *kubernetes.Clientset
 	config    *models.Config
+	watcher   *NamespaceWatcher
 }
 
 // NewContainer returns an empty or an initialized container for your handlers.
@@ -16,6 +17,12 @@ func NewContainer(clientset *kubernetes.Clientset, cfg *models.Config) (*Contain
 	c := Container{
 		clientset: clientset,
 		config:    cfg,
+		watcher:   nil, // Will be set later via SetWatcher
 	}
 	return &c, nil
+}
+
+// SetWatcher sets the NamespaceWatcher for the container
+func (c *Container) SetWatcher(watcher *NamespaceWatcher) {
+	c.watcher = watcher
 }

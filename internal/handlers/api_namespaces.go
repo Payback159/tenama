@@ -72,6 +72,38 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 	ns := c.parseNamespaceRequest(ctx)
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
+		// Check global resource limits if enabled
+		if c.config.GlobalLimits.Enabled && c.watcher != nil {
+			// Convert requested resources to v1.ResourceList
+			var requestedResources v1.ResourceList
+			var err error
+			if ns.Resources != nil {
+				requestedResources, err = ns.Resources.MarshalToResourceList()
+				if err != nil {
+					log.Errorf("Error parsing requested resources: %s", err)
+					return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Invalid resource format: "+err.Error(), http.StatusBadRequest)
+				}
+			}
+
+			// Check if namespace creation would exceed global limits
+			if !c.watcher.CanCreateNamespace(requestedResources) {
+				currentUsage := c.watcher.GetCurrentResourceUsage()
+				limits := c.watcher.GetGlobalLimits()
+
+				errorMsg := fmt.Sprintf(
+					"Global resource limits exceeded. Current usage: CPU=%v Memory=%v Storage=%v, Limits: CPU=%v Memory=%v Storage=%v",
+					currentUsage[v1.ResourceCPU],
+					currentUsage[v1.ResourceMemory],
+					currentUsage[v1.ResourceStorage],
+					limits[v1.ResourceCPU],
+					limits[v1.ResourceMemory],
+					limits[v1.ResourceStorage],
+				)
+				log.Warnf("Namespace creation rejected due to resource limits: %s", errorMsg)
+				return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, errorMsg, http.StatusTooManyRequests)
+			}
+		}
+
 		// create namespace
 		c.createNamespace(ctx, c.clientset, nsSpec, namespaceList)
 
@@ -469,15 +501,30 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 		log.Warnf("Error getting kubernetes server version: %s", err)
 	}
 
+	labels := map[string]string{
+		"created-by":                                 "tenama",
+		"tenama/namespace-duration":                  ns.Duration,
+		"pod-security.kubernetes.io/enforce":         "baseline",
+		"pod-security.kubernetes.io/enforce-version": podSecurityStandardVersion,
+	}
+
+	// Add resource labels if provided
+	if ns.Resources != nil {
+		if ns.Resources.CPU != "" {
+			labels["tenama/resource-cpu"] = ns.Resources.CPU
+		}
+		if ns.Resources.Memory != "" {
+			labels["tenama/resource-memory"] = ns.Resources.Memory
+		}
+		if ns.Resources.Storage != "" {
+			labels["tenama/resource-storage"] = ns.Resources.Storage
+		}
+	}
+
 	nsSpec := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: nsn,
-			Labels: map[string]string{
-				"created-by":                                 "tenama",
-				"tenama/namespace-duration":                  ns.Duration,
-				"pod-security.kubernetes.io/enforce":         "baseline",
-				"pod-security.kubernetes.io/enforce-version": podSecurityStandardVersion,
-			},
+			Name:   nsn,
+			Labels: labels,
 		},
 	}
 

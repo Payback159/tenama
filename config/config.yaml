@@ -2,15 +2,21 @@ logLevel: debug
 namespace:
   prefix: "tenama"
   suffix: "" # if not set tenama will use a random string instead
-  duration: "168h" #7 days
+  duration: "30s" # 30 seconds for quick testing
   resources:
     requests:
       cpu: "1000m"
       memory: "1Gi"
       storage: "1Gi"
-#    limits:
-#      cpu: "1000m"
-#      memory: "1Gi"
+
+# Global resource limits configuration
+globalLimits:
+  enabled: true
+  resources:
+    requests:
+      cpu: "5000m" # 5 CPU cores max
+      memory: "10Gi" # 10 GB max
+      storage: "50Gi" # 50 GB max
 
 basicAuth:
   - username: user1
