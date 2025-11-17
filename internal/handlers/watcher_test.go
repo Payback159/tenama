@@ -246,7 +246,7 @@ func TestConcurrentCancelAndRead(t *testing.T) {
 func TestResourceTracking(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
-	
+
 	// Set global limits
 	limits := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("5000m"),
@@ -254,7 +254,7 @@ func TestResourceTracking(t *testing.T) {
 		v1.ResourceStorage: parseQuantity("50Gi"),
 	}
 	watcher.SetGlobalLimits(limits)
-	
+
 	// Create test namespace with resources
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -266,17 +266,17 @@ func TestResourceTracking(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Extract and add resources
 	watcher.addToResourceTracking(ns)
-	
+
 	// Verify current usage (just check that something was added)
 	usage := watcher.GetCurrentResourceUsage()
 	cpuValue := usage[v1.ResourceCPU]
 	if cpuValue.Value() == 0 {
 		t.Error("Expected CPU usage to be non-zero after adding namespace")
 	}
-	
+
 	// Verify limits are still intact
 	currentLimits := watcher.GetGlobalLimits()
 	if len(currentLimits) == 0 {
@@ -288,7 +288,7 @@ func TestResourceTracking(t *testing.T) {
 func TestCanCreateNamespace(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
-	
+
 	// Set global limits
 	limits := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("5000m"),
@@ -296,7 +296,7 @@ func TestCanCreateNamespace(t *testing.T) {
 		v1.ResourceStorage: parseQuantity("50Gi"),
 	}
 	watcher.SetGlobalLimits(limits)
-	
+
 	// Add initial namespace
 	ns1 := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -309,7 +309,7 @@ func TestCanCreateNamespace(t *testing.T) {
 		},
 	}
 	watcher.addToResourceTracking(ns1)
-	
+
 	// Test 1: Can create namespace within limits
 	newResources1 := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("3000m"),
@@ -319,7 +319,7 @@ func TestCanCreateNamespace(t *testing.T) {
 	if !watcher.CanCreateNamespace(newResources1) {
 		t.Error("Expected CanCreateNamespace to return true for resources within limits")
 	}
-	
+
 	// Test 2: Cannot exceed CPU limit
 	newResources2 := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("5000m"),
@@ -329,7 +329,7 @@ func TestCanCreateNamespace(t *testing.T) {
 	if watcher.CanCreateNamespace(newResources2) {
 		t.Error("Expected CanCreateNamespace to return false when exceeding CPU limit")
 	}
-	
+
 	// Test 3: Cannot exceed memory limit
 	newResources3 := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("2000m"),
@@ -339,7 +339,7 @@ func TestCanCreateNamespace(t *testing.T) {
 	if watcher.CanCreateNamespace(newResources3) {
 		t.Error("Expected CanCreateNamespace to return false when exceeding memory limit")
 	}
-	
+
 	// Test 4: Exactly at limit (should succeed)
 	newResources4 := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("4000m"),
@@ -355,7 +355,7 @@ func TestCanCreateNamespace(t *testing.T) {
 func TestRemoveFromResourceTracking(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
-	
+
 	// Set global limits
 	limits := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("5000m"),
@@ -363,7 +363,7 @@ func TestRemoveFromResourceTracking(t *testing.T) {
 		v1.ResourceStorage: parseQuantity("50Gi"),
 	}
 	watcher.SetGlobalLimits(limits)
-	
+
 	// Add namespace
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -376,16 +376,16 @@ func TestRemoveFromResourceTracking(t *testing.T) {
 		},
 	}
 	watcher.addToResourceTracking(ns)
-	
+
 	// Verify resources were added
 	usage := watcher.GetCurrentResourceUsage()
 	if len(usage) == 0 {
 		t.Error("Expected resource usage to be tracked after adding namespace")
 	}
-	
+
 	// Remove namespace
 	watcher.removeFromResourceTracking("tenama-test-1")
-	
+
 	// Verify resources were removed (should be empty or minimal)
 	usage = watcher.GetCurrentResourceUsage()
 	if len(usage) > 0 {
@@ -397,7 +397,7 @@ func TestRemoveFromResourceTracking(t *testing.T) {
 func TestUpdateResourceTracking(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
-	
+
 	// Set global limits
 	limits := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("5000m"),
@@ -405,7 +405,7 @@ func TestUpdateResourceTracking(t *testing.T) {
 		v1.ResourceStorage: parseQuantity("50Gi"),
 	}
 	watcher.SetGlobalLimits(limits)
-	
+
 	// Add initial namespace
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -418,13 +418,13 @@ func TestUpdateResourceTracking(t *testing.T) {
 		},
 	}
 	watcher.addToResourceTracking(ns)
-	
+
 	// Update namespace with new resources
 	ns.ObjectMeta.Labels["tenama/resource-cpu"] = "2000m"
 	ns.ObjectMeta.Labels["tenama/resource-memory"] = "3Gi"
 	ns.ObjectMeta.Labels["tenama/resource-storage"] = "8Gi"
 	watcher.updateResourceTracking(ns)
-	
+
 	// Verify resources were updated (just check that something is tracked)
 	usage := watcher.GetCurrentResourceUsage()
 	if len(usage) == 0 {
@@ -436,7 +436,7 @@ func TestUpdateResourceTracking(t *testing.T) {
 func TestConcurrentResourceTracking(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	watcher := NewNamespaceWatcher(clientset.CoreV1(), "tenama")
-	
+
 	// Set global limits
 	limits := v1.ResourceList{
 		v1.ResourceCPU:     parseQuantity("10000m"),
@@ -444,9 +444,9 @@ func TestConcurrentResourceTracking(t *testing.T) {
 		v1.ResourceStorage: parseQuantity("500Gi"),
 	}
 	watcher.SetGlobalLimits(limits)
-	
+
 	done := make(chan bool)
-	
+
 	// Goroutines that add resources
 	for i := 0; i < 10; i++ {
 		go func(id int) {
@@ -464,7 +464,7 @@ func TestConcurrentResourceTracking(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Goroutines that read usage
 	for i := 0; i < 5; i++ {
 		go func() {
@@ -478,12 +478,12 @@ func TestConcurrentResourceTracking(t *testing.T) {
 			done <- true
 		}()
 	}
-	
+
 	// Wait for all goroutines
 	for i := 0; i < 15; i++ {
 		<-done
 	}
-	
+
 	// Verify final state (all namespaces should be tracked)
 	usage := watcher.GetCurrentResourceUsage()
 	if len(usage) == 0 {
