@@ -13,8 +13,7 @@ func TestConfigUnmarshal(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				LogLevel:        "info",
-				CleanupInterval: "24h",
+				LogLevel: "info",
 			},
 			wantErr: false,
 		},

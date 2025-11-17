@@ -1,9 +1,8 @@
 package models
 
 type Config struct {
-	LogLevel        string `yaml:"logLevel"`
-	CleanupInterval string `yaml:"cleanupInterval"`
-	Kubernetes      struct {
+	LogLevel string `yaml:"logLevel"`
+	Kubernetes struct {
 		ClusterEndpoint string `yaml:"clusterEndpoint"`
 	}
 	Namespace struct {

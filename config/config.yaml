@@ -1,5 +1,4 @@
 logLevel: debug
-cleanupInterval: 10m
 namespace:
   prefix: "tenama"
   suffix: "" # if not set tenama will use a random string instead
