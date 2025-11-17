@@ -62,7 +62,7 @@ func convertConfigResourcesToResourceList(res *models.Resources) (v1.ResourceLis
 	if res.Requests.Memory != "" {
 		q, err := resource.ParseQuantity(res.Requests.Memory)
 		if err != nil {
-			return nil, fmt.Errorf("invalid Memory quantity: %w", err)
+			return nil, fmt.Errorf("invalid memory quantity: %w", err)
 		}
 		rl[v1.ResourceMemory] = q
 	}
@@ -70,7 +70,7 @@ func convertConfigResourcesToResourceList(res *models.Resources) (v1.ResourceLis
 	if res.Requests.Storage != "" {
 		q, err := resource.ParseQuantity(res.Requests.Storage)
 		if err != nil {
-			return nil, fmt.Errorf("invalid Storage quantity: %w", err)
+			return nil, fmt.Errorf("invalid storage quantity: %w", err)
 		}
 		rl[v1.ResourceStorage] = q
 	}

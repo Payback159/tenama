@@ -66,13 +66,21 @@ func (c *Container) sendErrorResponse(ctx echo.Context, namespace string, messag
 	return ctx.JSON(status, response)
 }
 
+// formatResourceQuantity formats a resource quantity for display, showing "not set" if missing
+func formatResourceQuantity(rl v1.ResourceList, resourceName v1.ResourceName) string {
+	if q, ok := rl[resourceName]; ok {
+		return q.String()
+	}
+	return "not set"
+}
+
 // CreateNamespace - Create a new namespace
 func (c *Container) CreateNamespace(ctx echo.Context) error {
 	namespaceList, _ := getNamespaceList(c.clientset)
 	ns := c.parseNamespaceRequest(ctx)
 	nsSpec, _ := c.craftNamespaceSpecification(&ns, ctx)
 	if !existsNamespace(namespaceList, nsSpec.ObjectMeta.Name) {
-		// Check global resource limits if enabled
+		// Check and reserve global resource limits if enabled (atomic operation)
 		if c.config.GlobalLimits.Enabled && c.watcher != nil {
 			// Convert requested resources to v1.ResourceList
 			var requestedResources v1.ResourceList
@@ -86,18 +94,19 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			}
 
 			// Check if namespace creation would exceed global limits
+			// NOTE: The actual reservation happens when the watcher receives the ADDED event
 			if !c.watcher.CanCreateNamespace(requestedResources) {
 				currentUsage := c.watcher.GetCurrentResourceUsage()
 				limits := c.watcher.GetGlobalLimits()
 
 				errorMsg := fmt.Sprintf(
-					"Global resource limits exceeded. Current usage: CPU=%v Memory=%v Storage=%v, Limits: CPU=%v Memory=%v Storage=%v",
-					currentUsage[v1.ResourceCPU],
-					currentUsage[v1.ResourceMemory],
-					currentUsage[v1.ResourceStorage],
-					limits[v1.ResourceCPU],
-					limits[v1.ResourceMemory],
-					limits[v1.ResourceStorage],
+					"Global resource limits exceeded. Current usage: CPU=%s Memory=%s Storage=%s, Limits: CPU=%s Memory=%s Storage=%s",
+					formatResourceQuantity(currentUsage, v1.ResourceCPU),
+					formatResourceQuantity(currentUsage, v1.ResourceMemory),
+					formatResourceQuantity(currentUsage, v1.ResourceStorage),
+					formatResourceQuantity(limits, v1.ResourceCPU),
+					formatResourceQuantity(limits, v1.ResourceMemory),
+					formatResourceQuantity(limits, v1.ResourceStorage),
 				)
 				log.Warnf("Namespace creation rejected due to resource limits: %s", errorMsg)
 				return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, errorMsg, http.StatusTooManyRequests)

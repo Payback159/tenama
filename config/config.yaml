@@ -2,7 +2,7 @@ logLevel: debug
 namespace:
   prefix: "tenama"
   suffix: "" # if not set tenama will use a random string instead
-  duration: "30s" # 30 seconds for quick testing
+  duration: "168h" # 7 days (default for production)
   resources:
     requests:
       cpu: "1000m"

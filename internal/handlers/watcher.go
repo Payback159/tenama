@@ -289,7 +289,11 @@ func (nw *NamespaceWatcher) removeFromResourceTracking(namespaceName string) {
 	for key, val := range resources {
 		if current, ok := nw.currentUsage[key]; ok {
 			current.Sub(val)
-			if current.IsZero() {
+			// Validate that we don't end up with negative values (indicates tracking inconsistency)
+			if current.Sign() < 0 {
+				log.Warnf("Resource tracking inconsistency detected: %s became negative after removing namespace %s", key, namespaceName)
+				delete(nw.currentUsage, key)
+			} else if current.IsZero() {
 				delete(nw.currentUsage, key)
 			} else {
 				nw.currentUsage[key] = current
@@ -308,11 +312,10 @@ func (nw *NamespaceWatcher) updateResourceTracking(ns *v1.Namespace) {
 	}
 
 	nw.resourceMu.Lock()
-	defer nw.resourceMu.Unlock()
 
 	oldResources, exists := nw.nsResources[ns.Name]
 	if !exists {
-		// If not tracked yet, treat as add
+		// If not tracked yet, treat as add (must unlock before calling to avoid deadlock)
 		nw.resourceMu.Unlock()
 		nw.addToResourceTracking(ns)
 		return
@@ -344,6 +347,7 @@ func (nw *NamespaceWatcher) updateResourceTracking(ns *v1.Namespace) {
 
 	nw.nsResources[ns.Name] = newResources.DeepCopy()
 	log.Debugf("Updated resources for namespace %s, current usage: %v", ns.Name, nw.currentUsage)
+	nw.resourceMu.Unlock()
 }
 
 // CanCreateNamespace checks if creating a new namespace would exceed global limits
