@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -151,5 +152,90 @@ func TestStop(t *testing.T) {
 
 	if count := watcher.GetActiveTimerCount(); count != 0 {
 		t.Errorf("Expected 0 timers after stop, got %d", count)
+	}
+}
+
+// TestConcurrentTimerAccess tests that concurrent access to timers is safe
+func TestConcurrentTimerAccess(t *testing.T) {
+	watcher := &NamespaceWatcher{
+		timers: make(map[string]*time.Timer),
+	}
+
+	// Spawn multiple goroutines accessing timers concurrently
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			for j := 0; j < 100; j++ {
+				nsName := fmt.Sprintf("test-ns-%d-%d", id, j)
+				watcher.mu.Lock()
+				watcher.timers[nsName] = time.AfterFunc(1*time.Hour, func() {})
+				watcher.mu.Unlock()
+
+				_ = watcher.GetActiveTimerCount()
+
+				watcher.cancel(nsName)
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Verify final state
+	if count := watcher.GetActiveTimerCount(); count != 0 {
+		t.Errorf("Expected 0 timers after concurrent ops, got %d", count)
+	}
+}
+
+// TestConcurrentCancelAndRead tests concurrent cancel and read operations
+func TestConcurrentCancelAndRead(t *testing.T) {
+	watcher := &NamespaceWatcher{
+		timers: make(map[string]*time.Timer),
+	}
+
+	// Pre-populate with timers
+	for i := 0; i < 50; i++ {
+		nsName := fmt.Sprintf("namespace-%d", i)
+		watcher.mu.Lock()
+		watcher.timers[nsName] = time.AfterFunc(1*time.Hour, func() {})
+		watcher.mu.Unlock()
+	}
+
+	done := make(chan bool)
+
+	// Goroutines that cancel timers
+	for i := 0; i < 5; i++ {
+		go func(id int) {
+			for j := id; j < 50; j += 5 {
+				nsName := fmt.Sprintf("namespace-%d", j)
+				watcher.cancel(nsName)
+				time.Sleep(1 * time.Millisecond)
+			}
+			done <- true
+		}(i)
+	}
+
+	// Goroutines that read count
+	for i := 0; i < 5; i++ {
+		go func() {
+			for j := 0; j < 20; j++ {
+				_ = watcher.GetActiveTimerCount()
+				time.Sleep(1 * time.Millisecond)
+			}
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// All timers should be cancelled
+	if count := watcher.GetActiveTimerCount(); count != 0 {
+		t.Errorf("Expected 0 timers after concurrent cancel, got %d", count)
 	}
 }
