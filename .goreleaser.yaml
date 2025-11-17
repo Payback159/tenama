@@ -6,7 +6,7 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
-version: 1
+version: 2
 
 before:
   hooks:
@@ -28,9 +28,7 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
-    # this name template makes the OS and Arch compatible with the results of `uname`.
-    name_template: >-
+  - name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
@@ -39,11 +37,12 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
 
 dockers:
-  - image_templates:
+  - goos: linux
+    goarch: amd64
+    image_templates:
       - ghcr.io/payback159/tenama:v{{ .Version }}-amd64
     dockerfile: goreleaser.dockerfile
     use: buildx
-    goarch: amd64
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
@@ -54,11 +53,12 @@ dockers:
     extra_files:
       - api/
       - web/
-  - image_templates:
+  - goos: linux
+    goarch: arm64
+    image_templates:
       - ghcr.io/payback159/tenama:v{{ .Version }}-arm64
     dockerfile: goreleaser.dockerfile
     use: buildx
-    goarch: arm64
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{.Date}}"
@@ -69,6 +69,7 @@ dockers:
     extra_files:
       - api/
       - web/
+
 docker_manifests:
   - name_template: "ghcr.io/payback159/tenama:v{{ .Version }}"
     image_templates:
