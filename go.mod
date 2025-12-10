@@ -4,8 +4,8 @@ go 1.25.0
 
 require (
 	github.com/labstack/echo/v4 v4.13.4
-	k8s.io/apimachinery v0.34.2
-	k8s.io/client-go v0.34.2
+	k8s.io/apimachinery v0.34.3
+	k8s.io/client-go v0.34.3
 )
 
 require (
@@ -64,5 +64,5 @@ require (
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.34.2
+	k8s.io/api v0.34.3
 )
