@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/labstack/gommon/log"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,10 +58,10 @@ func NewNamespaceWatcherFromClientset(clientset *kubernetes.Clientset, prefix st
 
 // Start begins watching namespaces
 func (nw *NamespaceWatcher) Start(ctx context.Context) error {
-	log.Infof("Starting namespace watcher with prefix: %s", nw.prefix)
+	slog.Info("Starting namespace watcher", "prefix", nw.prefix)
 
 	if err := nw.initializeExisting(ctx); err != nil {
-		log.Errorf("Error initializing namespaces: %s", err)
+		slog.Error("Error initializing namespaces", "error", err)
 	}
 
 	go nw.watch(ctx)
@@ -70,7 +70,7 @@ func (nw *NamespaceWatcher) Start(ctx context.Context) error {
 
 // Stop shuts down the watcher
 func (nw *NamespaceWatcher) Stop() {
-	log.Info("Stopping namespace watcher")
+	slog.Info("Stopping namespace watcher")
 	close(nw.done)
 	nw.stopAllTimers()
 }
@@ -84,7 +84,7 @@ func (nw *NamespaceWatcher) initializeExisting(ctx context.Context) error {
 		return fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
-	log.Debugf("Found %d existing namespaces", len(list.Items))
+	slog.Debug("Found existing namespaces", "count", len(list.Items))
 
 	for _, ns := range list.Items {
 		if nw.shouldProcess(&ns) {
@@ -101,12 +101,12 @@ func (nw *NamespaceWatcher) watch(ctx context.Context) {
 		LabelSelector: "created-by=tenama",
 	})
 	if err != nil {
-		log.Errorf("Error watching namespaces: %s", err)
+		slog.Error("Error watching namespaces", "error", err)
 		return
 	}
 	defer watcher.Stop()
 
-	log.Info("Namespace watcher running")
+	slog.Info("Namespace watcher running")
 
 	for {
 		select {
@@ -114,7 +114,7 @@ func (nw *NamespaceWatcher) watch(ctx context.Context) {
 			return
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
-				log.Warn("Watcher channel closed")
+				slog.Warn("Watcher channel closed")
 				return
 			}
 
@@ -164,7 +164,7 @@ func (nw *NamespaceWatcher) schedule(ns *v1.Namespace) {
 	durationStr := ns.Labels["tenama/namespace-duration"]
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
-		log.Errorf("Failed to parse duration for %s: %s", ns.Name, err)
+		slog.Error("Failed to parse duration", "namespace", ns.Name, "error", err)
 		return
 	}
 
@@ -173,7 +173,7 @@ func (nw *NamespaceWatcher) schedule(ns *v1.Namespace) {
 	timeUntilExpiration := time.Until(expirationTime)
 
 	if timeUntilExpiration <= 0 {
-		log.Infof("Namespace %s already expired, deleting", ns.Name)
+		slog.Info("Namespace already expired, deleting", "namespace", ns.Name)
 		nw.delete(ns.Name)
 		return
 	}
@@ -184,7 +184,7 @@ func (nw *NamespaceWatcher) schedule(ns *v1.Namespace) {
 	}
 
 	nw.timers[ns.Name] = time.AfterFunc(timeUntilExpiration, func() {
-		log.Infof("Deleting namespace %s (lifetime expired)", ns.Name)
+		slog.Info("Deleting namespace (lifetime expired)", "namespace", ns.Name)
 		nw.delete(ns.Name)
 		nw.mu.Lock()
 		delete(nw.timers, ns.Name)
@@ -192,7 +192,7 @@ func (nw *NamespaceWatcher) schedule(ns *v1.Namespace) {
 	})
 	nw.mu.Unlock()
 
-	log.Infof("Scheduled cleanup for %s in %v", ns.Name, timeUntilExpiration)
+	slog.Info("Scheduled cleanup", "namespace", ns.Name, "duration", timeUntilExpiration.String())
 }
 
 // cancel stops cleanup timer for a namespace
@@ -229,9 +229,9 @@ func (nw *NamespaceWatcher) delete(namespaceName string) {
 
 	err := nw.namespaceGetter.Namespaces().Delete(ctx, namespaceName, metav1.DeleteOptions{})
 	if err != nil {
-		log.Errorf("Error deleting namespace %s: %s", namespaceName, err)
+		slog.Error("Error deleting namespace", "namespace", namespaceName, "error", err)
 	} else {
-		log.Infof("Successfully deleted namespace %s", namespaceName)
+		slog.Info("Successfully deleted namespace", "namespace", namespaceName)
 	}
 }
 
@@ -272,7 +272,7 @@ func (nw *NamespaceWatcher) addToResourceTracking(ns *v1.Namespace) {
 		}
 	}
 
-	log.Debugf("Added resources for namespace %s, current usage: %v", ns.Name, nw.currentUsage)
+	slog.Debug("Added resources for namespace", "namespace", ns.Name, "currentUsage", nw.currentUsage)
 }
 
 // removeFromResourceTracking removes namespace resources from the current usage
@@ -291,7 +291,7 @@ func (nw *NamespaceWatcher) removeFromResourceTracking(namespaceName string) {
 			current.Sub(val)
 			// Validate that we don't end up with negative values (indicates tracking inconsistency)
 			if current.Sign() < 0 {
-				log.Warnf("Resource tracking inconsistency detected: %s became negative after removing namespace %s", key, namespaceName)
+				slog.Warn("Resource tracking inconsistency detected: value became negative", "resource", key, "namespace", namespaceName)
 				delete(nw.currentUsage, key)
 			} else if current.IsZero() {
 				delete(nw.currentUsage, key)
@@ -302,7 +302,7 @@ func (nw *NamespaceWatcher) removeFromResourceTracking(namespaceName string) {
 	}
 
 	delete(nw.nsResources, namespaceName)
-	log.Debugf("Removed resources for namespace %s, current usage: %v", namespaceName, nw.currentUsage)
+	slog.Debug("Removed resources for namespace", "namespace", namespaceName, "currentUsage", nw.currentUsage)
 }
 
 // updateResourceTracking updates resources for a modified namespace
@@ -346,7 +346,7 @@ func (nw *NamespaceWatcher) updateResourceTracking(ns *v1.Namespace) {
 	}
 
 	nw.nsResources[ns.Name] = newResources.DeepCopy()
-	log.Debugf("Updated resources for namespace %s, current usage: %v", ns.Name, nw.currentUsage)
+	slog.Debug("Updated resources for namespace", "namespace", ns.Name, "currentUsage", nw.currentUsage)
 	nw.resourceMu.Unlock()
 }
 
@@ -378,8 +378,11 @@ func (nw *NamespaceWatcher) CanCreateNamespace(newNamespaceResources v1.Resource
 
 		// Compare with limit
 		if total.Cmp(limit) > 0 {
-			log.Warnf("Global limit exceeded for %s: current=%v, new=%v, limit=%v",
-				resourceType, currentVal.String(), newVal.String(), limit.String())
+			slog.Warn("Global limit exceeded",
+				"resource", resourceType,
+				"current", currentVal.String(),
+				"new", newVal.String(),
+				"limit", limit.String())
 			return false
 		}
 	}

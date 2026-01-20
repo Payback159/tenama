@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/labstack/gommon/log"
 	"gopkg.in/yaml.v2"
 
 	v1 "k8s.io/api/core/v1"
@@ -25,6 +25,35 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
+
+// initLogger initializes slog with the configured log level and format
+func initLogger(cfg *models.Config) {
+	var level slog.Level
+	switch strings.ToUpper(cfg.LogLevel) {
+	case "DEBUG":
+		level = slog.LevelDebug
+	case "INFO":
+		level = slog.LevelInfo
+	case "WARN":
+		level = slog.LevelWarn
+	case "ERROR":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+
+	var handler slog.Handler
+	if strings.ToLower(cfg.LogFormat) == "text" {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		// Default to JSON for Kubernetes environments
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	}
+
+	slog.SetDefault(slog.New(handler))
+}
 
 // It opens a file, decodes the YAML into a struct, and returns the struct
 func newConfig(configPath string) (*models.Config, error) {
@@ -87,26 +116,12 @@ func main() {
 
 	cfg, err := newConfig(cfgPath)
 	if err != nil {
-		log.Fatalf("Error reading config file: %s", err)
+		slog.Error("Error reading config file", "error", err)
+		os.Exit(1)
 	}
 
-	if err != nil {
-		panic(fmt.Sprintf("Could not parse log level from string: %s", cfg.LogLevel))
-	}
-
-	// set log level
-	switch strings.ToUpper(cfg.LogLevel) {
-	case "DEBUG":
-		log.SetLevel(log.DEBUG)
-	case "INFO":
-		log.SetLevel(log.INFO)
-	case "WARN":
-		log.SetLevel(log.WARN)
-	case "ERROR":
-		log.SetLevel(log.ERROR)
-	default:
-		log.SetLevel(log.INFO)
-	}
+	// Initialize logger with config
+	initLogger(cfg)
 
 	// prepare kubernetes client configuration
 	var kubeconfig *string
@@ -115,31 +130,34 @@ func main() {
 	var config *rest.Config
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		log.Debugf("Using kubeconfig file: %s", *kubeconfig)
+		slog.Debug("Using kubeconfig file", "path", *kubeconfig)
 	} else {
 		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		log.Debugf("Using in cluster configuration")
+		slog.Debug("Using in cluster configuration")
 	}
 	flag.Parse()
 
 	//use the current context in kubeconfig
 	config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		log.Debugf("Could not read kubeconfig file: %s", err)
+		slog.Debug("Could not read kubeconfig file", "error", err)
 		config, err = rest.InClusterConfig()
 		if err != nil {
-			log.Fatalf("Could not read k8s cluster configuration: %s", err)
+			slog.Error("Could not read k8s cluster configuration", "error", err)
+			os.Exit(1)
 		}
 	}
 
 	clientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Could not create k8s client: %s", err)
+		slog.Error("Could not create k8s client", "error", err)
+		os.Exit(1)
 	}
 
 	c, err := handlers.NewContainer(clientset, cfg)
 	if err != nil {
-		log.Fatalf("Container for the handler could not be initialized: %s", err)
+		slog.Error("Container for the handler could not be initialized", "error", err)
+		os.Exit(1)
 	}
 	c.SetBasicAuthUserList(cfg)
 
@@ -147,25 +165,30 @@ func main() {
 	namespaceWatcher := handlers.NewNamespaceWatcher(clientset.CoreV1(), cfg.Namespace.Prefix)
 
 	// Configure global resource limits if enabled
-	log.Debugf("GlobalLimits config: Enabled=%v", cfg.GlobalLimits.Enabled)
+	slog.Debug("GlobalLimits config", "enabled", cfg.GlobalLimits.Enabled)
 	if cfg.GlobalLimits.Enabled {
 		// Convert configured limits to v1.ResourceList
 		limitsResourceList, err := convertConfigResourcesToResourceList(&cfg.GlobalLimits.Resources)
 		if err != nil {
-			log.Fatalf("Failed to parse global resource limits: %s", err)
+			slog.Error("Failed to parse global resource limits", "error", err)
+			os.Exit(1)
 		}
 		namespaceWatcher.SetGlobalLimits(limitsResourceList)
-		log.Infof("Global resource limits enabled: CPU=%v Memory=%v Storage=%v",
-			limitsResourceList[v1.ResourceCPU],
-			limitsResourceList[v1.ResourceMemory],
-			limitsResourceList[v1.ResourceStorage])
+		cpuLimit := limitsResourceList[v1.ResourceCPU]
+		memoryLimit := limitsResourceList[v1.ResourceMemory]
+		storageLimit := limitsResourceList[v1.ResourceStorage]
+		slog.Info("Global resource limits enabled",
+			"cpu", cpuLimit.String(),
+			"memory", memoryLimit.String(),
+			"storage", storageLimit.String())
 	}
 
 	// Attach watcher to container for use in handlers
 	c.SetWatcher(namespaceWatcher)
 
 	if err := namespaceWatcher.Start(context.Background()); err != nil {
-		log.Fatalf("Failed to start namespace watcher: %s", err)
+		slog.Error("Failed to start namespace watcher", "error", err)
+		os.Exit(1)
 	}
 
 	// create new echo instance and register authenticated group
@@ -174,9 +197,47 @@ func main() {
 	e.HidePort = false
 	ag := e.Group("/namespace")
 
-	// Middleware
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
+	// Middleware - using RequestLoggerWithConfig (replaces deprecated middleware.Logger())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogStatus:   true,
+		LogURI:      true,
+		LogMethod:   true,
+		LogLatency:  true,
+		LogRemoteIP: true,
+		LogError:    true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			if v.Error != nil {
+				slog.Error("request",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"latency", v.Latency.String(),
+					"remote_ip", v.RemoteIP,
+					"error", v.Error,
+				)
+			} else {
+				slog.Info("request",
+					"method", v.Method,
+					"uri", v.URI,
+					"status", v.Status,
+					"latency", v.Latency.String(),
+					"remote_ip", v.RemoteIP,
+				)
+			}
+			return nil
+		},
+	}))
+	e.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
+			slog.Error("panic recovered",
+				"error", err,
+				"uri", c.Request().RequestURI,
+				"method", c.Request().Method,
+				"stack", string(stack),
+			)
+			return err
+		},
+	}))
 	ag.Use(middleware.BasicAuth(c.BasicAuthValidator))
 
 	// GetVersion - Outputs the version of tenama
@@ -203,9 +264,9 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		log.Info("Shutdown signal received, stopping namespace watcher...")
+		slog.Info("Shutdown signal received, stopping namespace watcher...")
 		namespaceWatcher.Stop()
-		log.Info("Namespace watcher stopped, shutting down server...")
+		slog.Info("Namespace watcher stopped, shutting down server...")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		e.Shutdown(shutdownCtx)
