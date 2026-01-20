@@ -1,4 +1,5 @@
 logLevel: debug
+logFormat: "json" # "json" or "text", use "json" for Kubernetes environments
 namespace:
   prefix: "tenama"
   suffix: "" # if not set tenama will use a random string instead

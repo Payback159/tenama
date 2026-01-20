@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Payback159/tenama/internal/models"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -35,7 +35,7 @@ var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 func (c *Container) parseNamespaceRequest(ctx echo.Context) models.Namespace {
 	ns := models.Namespace{}
 	if err := ctx.Bind(&ns); err != nil {
-		log.Errorf("Error parsing namespace request: %s", err)
+		slog.Error("Error parsing namespace request", "error", err)
 		c.sendErrorResponse(ctx, "", "Error parsing namespace request", http.StatusBadRequest)
 	}
 	return ns
@@ -88,7 +88,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 			if ns.Resources != nil {
 				requestedResources, err = ns.Resources.MarshalToResourceList()
 				if err != nil {
-					log.Errorf("Error parsing requested resources: %s", err)
+					slog.Error("Error parsing requested resources", "error", err)
 					return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Invalid resource format: "+err.Error(), http.StatusBadRequest)
 				}
 			}
@@ -108,7 +108,7 @@ func (c *Container) CreateNamespace(ctx echo.Context) error {
 					formatResourceQuantity(limits, v1.ResourceMemory),
 					formatResourceQuantity(limits, v1.ResourceStorage),
 				)
-				log.Warnf("Namespace creation rejected due to resource limits: %s", errorMsg)
+				slog.Warn("Namespace creation rejected due to resource limits", "error", errorMsg)
 				return c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, errorMsg, http.StatusTooManyRequests)
 			}
 		}
@@ -152,14 +152,14 @@ func (c *Container) DeleteNamespace(ctx echo.Context) error {
 	namespace := strings.Trim(ctx.Param("namespace"), "/")
 
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Infof("Namespace %s does not start with prefix %s", namespace, c.config.Namespace.Prefix)
+		slog.Info("Namespace does not start with prefix", "namespace", namespace, "prefix", c.config.Namespace.Prefix)
 		c.sendErrorResponse(ctx, namespace, "Namespace does not start with prefix "+c.config.Namespace.Prefix, http.StatusBadRequest)
 	}
 
-	log.Infof("Delete namespace %s through an API call.", namespace)
+	slog.Info("Delete namespace through an API call", "namespace", namespace)
 	err := c.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, metav1.DeleteOptions{})
 	if err != nil {
-		log.Errorf("Error deleting namespace: %s", err)
+		slog.Error("Error deleting namespace", "error", err)
 		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusInternalServerError)
 	}
 
@@ -172,7 +172,7 @@ func (c *Container) GetNamespaces(ctx echo.Context) error {
 		LabelSelector: "created-by=tenama",
 	})
 	if err != nil {
-		log.Errorf("Error getting namespaces: %s", err)
+		slog.Error("Error getting namespaces", "error", err)
 		c.sendErrorResponse(ctx, "", "Error getting namespaces", http.StatusInternalServerError)
 	}
 
@@ -197,19 +197,19 @@ func (c *Container) GetNamespaceByName(ctx echo.Context) error {
 
 	//Check if namespace is valid and starts with the prefix from the config file (e.g. tenama)
 	if !strings.HasPrefix(namespace, c.config.Namespace.Prefix) {
-		log.Warnf("SearchingNamespace %s is invalid", namespace)
+		slog.Warn("SearchingNamespace is invalid", "namespace", namespace)
 		c.sendErrorResponse(ctx, namespace, "Namespace is invalid", http.StatusBadRequest)
 	}
 
 	ns, err := c.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if err != nil {
-		log.Errorf("Error getting namespace: %s", err)
+		slog.Error("Error getting namespace", "error", err)
 		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusInternalServerError)
 	}
 
 	//check if namespace is found
 	if ns == nil {
-		log.Warnf("Namespace %s not found", namespace)
+		slog.Warn("Namespace not found", "namespace", namespace)
 		c.sendErrorResponse(ctx, namespace, "Namespace not found", http.StatusNotFound)
 	}
 
@@ -221,7 +221,7 @@ func (c *Container) convertKubeconfigToYaml(ctx echo.Context, namespace string, 
 	var kubeconfigYaml []byte
 	var err error
 	if kubeconfigYaml, err = clientcmd.Write(*kubeconfig); err != nil {
-		log.Errorf("Error converting kubeconfig to yaml: %s", err)
+		slog.Error("Error converting kubeconfig to yaml", "error", err)
 		c.sendErrorResponse(ctx, namespace, "Error converting kubeconfig to yaml", http.StatusInternalServerError)
 	}
 	return kubeconfigYaml
@@ -231,13 +231,13 @@ func (c *Container) convertKubeconfigToYaml(ctx echo.Context, namespace string, 
 func (c *Container) GetKubeconfig(ctx echo.Context, namespace string, secret *v1.Secret) *clientcmdapi.Config {
 	serviceAccountSecret, err := c.clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 	if err != nil {
-		log.Errorf("Error getting service account token secret: %s", err)
+		slog.Error("Error getting service account token secret", "error", err)
 		c.sendErrorResponse(ctx, namespace, "Error getting service account token secret", http.StatusInternalServerError)
 		return nil
 	}
 	kubeconfig := c.craftKubeconfig(ctx, namespace, serviceAccountSecret)
 	if err != nil {
-		log.Errorf("Error crafting kubeconfig: %s", err)
+		slog.Error("Error crafting kubeconfig", "error", err)
 		c.sendErrorResponse(ctx, namespace, "Error crafting kubeconfig", http.StatusInternalServerError)
 		return nil
 	}
@@ -336,10 +336,10 @@ func (c *Container) craftUserRolebindings(namespace string, users []string, serv
 }
 
 func (c *Container) createRolebinding(ctx echo.Context, clientset *kubernetes.Clientset, rb *rbacv1.RoleBinding, ns string) {
-	log.Debugf("creating binding: %s for service account %s in namespace %s for users", rb.Name, rb.Subjects[:len(rb.Subjects)-1], ns)
+	slog.Debug("Creating binding for service account", "binding", rb.Name, "subjects", rb.Subjects[:len(rb.Subjects)-1], "namespace", ns)
 	rb, err := clientset.RbacV1().RoleBindings(ns).Create(context.TODO(), rb, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("Error creating rolebinding: %s", err)
+		slog.Error("Error creating rolebinding", "error", err)
 		c.sendErrorResponse(ctx, ns, "Error creating rolebinding", http.StatusInternalServerError)
 	}
 }
@@ -347,7 +347,7 @@ func (c *Container) createRolebinding(ctx echo.Context, clientset *kubernetes.Cl
 // Checks if resource values are set in the config file and
 // crafts a ResourceQuota for the namespace
 func (c *Container) craftNamespaceQuotaSpecification(namespace string) *v1.ResourceQuota {
-	log.Debugf("crafting quota for the namespace %s", namespace)
+	slog.Debug("Crafting quota for the namespace", "namespace", namespace)
 
 	quota := &v1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
@@ -395,7 +395,7 @@ func (c *Container) craftNamespaceQuotaSpecification(namespace string) *v1.Resou
 
 // craft ServiceAccount to give access to the newly generated namespace
 func (c *Container) craftServiceAccountSpecification(namespace string) *v1.ServiceAccount {
-	log.Debugf("crafting service account for the namespace %s", namespace)
+	slog.Debug("Crafting service account for the namespace", "namespace", namespace)
 	return &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.config.Namespace.Prefix + separationString + "sa",
@@ -405,17 +405,17 @@ func (c *Container) craftServiceAccountSpecification(namespace string) *v1.Servi
 }
 
 func (c *Container) createServiceAccount(ctx echo.Context, clientset *kubernetes.Clientset, sa *v1.ServiceAccount, ns string) {
-	log.Debugf("creating ServiceAccount %s in namespace %s", sa.Name, ns)
+	slog.Debug("Creating ServiceAccount", "name", sa.Name, "namespace", ns)
 	sa, err := clientset.CoreV1().ServiceAccounts(ns).Create(context.TODO(), sa, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("Error creating service account: %s", err)
+		slog.Error("Error creating service account", "error", err)
 		c.sendErrorResponse(ctx, ns, "Error creating service account", http.StatusInternalServerError)
 	}
 }
 
 // craft secret for service account token for the crafted ServiceAccount
 func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace string) *v1.Secret {
-	log.Debugf("crafting secret for the service account in the namespace %s", namespace)
+	slog.Debug("Crafting secret for the service account", "namespace", namespace)
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        c.config.Namespace.Prefix + separationString + "sa-token",
@@ -427,12 +427,12 @@ func (c *Container) craftServiceAccountTokenSecretSpecificationn(namespace strin
 }
 
 func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clientset *kubernetes.Clientset, secret *v1.Secret, ns string) *v1.Secret {
-	log.Debugf("creating Secret %s in namespace %s", secret.Name, ns)
+	slog.Debug("Creating Secret", "name", secret.Name, "namespace", ns)
 	//Create Token Secret, wait for it to be created and then return it
 
 	secret, err := clientset.CoreV1().Secrets(ns).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("Error creating secret: %s", err)
+		slog.Error("Error creating secret", "error", err)
 		c.sendErrorResponse(ctx, ns, "Error creating ServiceAccount secret", http.StatusInternalServerError)
 	}
 	//loop until secret has a data field with a token in it
@@ -444,12 +444,12 @@ func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clients
 	for {
 		select {
 		case <-timeout:
-			log.Errorf("timeout reached before token was created in secret data field")
+			slog.Error("Timeout reached before token was created in secret data field")
 			c.sendErrorResponse(ctx, ns, "timeout reached before token was created in secret data field", http.StatusInternalServerError)
 		case <-ticker.C:
 			secret, err := clientset.CoreV1().Secrets(ns).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 			if err != nil {
-				log.Errorf("Error getting secret: %s", err)
+				slog.Error("Error getting secret", "error", err)
 				c.sendErrorResponse(ctx, ns, "Error getting ServiceAccount secret", http.StatusInternalServerError)
 			}
 			if secret.Data["token"] != nil {
@@ -460,10 +460,10 @@ func (c *Container) createSecretForServiceAccountToken(ctx echo.Context, clients
 }
 
 func (c *Container) createNamespaceQuota(ctx echo.Context, clientset *kubernetes.Clientset, quota *v1.ResourceQuota, ns string) {
-	log.Debugf("creating quota %s in namespace %s", quota.Name, ns)
+	slog.Debug("Creating quota", "name", quota.Name, "namespace", ns)
 	quota, err := clientset.CoreV1().ResourceQuotas(ns).Create(context.TODO(), quota, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("Error creating namespace quota: %s", err)
+		slog.Error("Error creating namespace quota", "error", err)
 		c.sendErrorResponse(ctx, ns, "Error creating namespace quota", http.StatusInternalServerError)
 	}
 }
@@ -472,14 +472,14 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 	var nsn string
 
 	if c.config.Namespace.Prefix == "" {
-		log.Errorf("Prefix is not set in config file")
+		slog.Error("Prefix is not set in config file")
 		return nil, errors.New("prefix is not set in config file")
 	}
 
 	nsn = c.config.Namespace.Prefix + separationString
 
 	if ns.Infix == "" {
-		log.Errorf("Infix is not set in request")
+		slog.Error("Infix is not set in request")
 		return nil, errors.New("infix is not set in request")
 	}
 
@@ -487,7 +487,7 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 
 	nsn, err := validateAndTransformToK8sName(nsn, []rune(separationString)[0])
 	if err != nil {
-		log.Errorf("Error parsing namespace name: %s", nsn)
+		slog.Error("Error parsing namespace name", "namespace", nsn)
 	}
 
 	if ns.Suffix != "" {
@@ -499,7 +499,7 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 
 	namespaceDuration, err := time.ParseDuration(ns.Duration)
 	if err != nil {
-		log.Warnf("Error parsing duration: %s", ns.Duration)
+		slog.Warn("Error parsing duration", "duration", ns.Duration)
 		c.sendErrorResponse(ctx, nsn, "Error parsing duration", http.StatusBadRequest)
 	}
 
@@ -507,7 +507,7 @@ func (c *Container) craftNamespaceSpecification(ns *models.Namespace, ctx echo.C
 
 	podSecurityStandardVersion, err := getK8sServerVersion(c.clientset)
 	if err != nil {
-		log.Warnf("Error getting kubernetes server version: %s", err)
+		slog.Warn("Error getting kubernetes server version", "error", err)
 	}
 
 	labels := map[string]string{
@@ -572,16 +572,16 @@ func getNamespaceList(clientset *kubernetes.Clientset) (*v1.NamespaceList, error
 }
 
 func (c *Container) createNamespace(ctx echo.Context, clientset *kubernetes.Clientset, nsSpec *v1.Namespace, namespaceList *v1.NamespaceList) {
-	log.Infof("Considering to create namespace %s", nsSpec.Name)
+	slog.Info("Considering to create namespace", "namespace", nsSpec.Name)
 	if !existsNamespaceWithPrefix(namespaceList, nsSpec.Name) {
 		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
-			log.Errorf("Error creating namespace %s: %s", nsSpec.Name, err)
+			slog.Error("Error creating namespace", "namespace", nsSpec.Name, "error", err)
 			c.sendErrorResponse(ctx, nsSpec.ObjectMeta.Name, "Error creating namespace", http.StatusInternalServerError)
 		}
-		log.Infof("Created Namespace %s", nsSpec.Name)
+		slog.Info("Created Namespace", "namespace", nsSpec.Name)
 	}
-	log.Warnf("Namespace matching %s already exists!", nsSpec.Name)
+	slog.Warn("Namespace matching already exists", "namespace", nsSpec.Name)
 }
 
 // replaces k8s invalid chars (separationRune) in inputString
@@ -603,9 +603,11 @@ func validateAndTransformToK8sName(inputString string, separationRune rune) (str
 	for _, ch := range inputStringLowerCase {
 		chs := string(ch)
 		if !r.MatchString(chs) {
-			log.Debugf("namespace '%s' contains invalid character: %s,"+
-				"allowed are only ones that match the regex: %s, appending a '%s' instead of this character!",
-				inputStringLowerCase, chs, r, string(separationRune))
+			slog.Debug("Namespace contains invalid character",
+				"namespace", inputStringLowerCase,
+				"character", chs,
+				"regex", r.String(),
+				"replacement", string(separationRune))
 			normalizedNameRunes = append(normalizedNameRunes, separationRune)
 		}
 		normalizedNameRunes = append(normalizedNameRunes, ch)
@@ -641,7 +643,7 @@ func chompBeginningCharacter(runearr []rune, runechar rune) []rune {
 	var chompedRune []rune
 	for _, cr := range runearr {
 		if chomping && cr == runechar {
-			log.Debugf("chomping character %s from string %s", string(cr), string(runechar))
+			slog.Debug("Chomping character from string", "character", string(cr), "runechar", string(runechar))
 		} else {
 			chompedRune = append(chompedRune, cr)
 			chomping = false

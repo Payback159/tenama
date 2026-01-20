@@ -2,6 +2,7 @@ package models
 
 type Config struct {
 	LogLevel     string       `yaml:"logLevel"`
+	LogFormat    string       `yaml:"logFormat"` // "json" or "text", defaults to "json"
 	GlobalLimits GlobalLimits `yaml:"globalLimits"`
 	Kubernetes   struct {
 		ClusterEndpoint string `yaml:"clusterEndpoint"`
