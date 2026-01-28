@@ -144,6 +144,11 @@ func downloadAndInstall(tag string) error {
 
 	tr := tar.NewReader(gzr)
 
+	absTargetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		return err
+	}
+
 	foundDist := false
 	for {
 		header, err := tr.Next()
@@ -170,13 +175,23 @@ func downloadAndInstall(tag string) error {
 			}
 
 			destPath := filepath.Join(targetDir, relPath)
-
-			// Create directory if needed (e.g. dist/foo/bar.js)
-			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			absDestPath, err := filepath.Abs(destPath)
+			if err != nil {
 				return err
 			}
 
-			f, err := os.Create(destPath)
+			// Ensure that the destination path is within the target directory
+			prefix := absTargetDir + string(os.PathSeparator)
+			if !strings.HasPrefix(absDestPath+string(os.PathSeparator), prefix) {
+				return fmt.Errorf("invalid path in archive: %s", header.Name)
+			}
+
+			// Create directory if needed (e.g. dist/foo/bar.js)
+			if err := os.MkdirAll(filepath.Dir(absDestPath), 0755); err != nil {
+				return err
+			}
+
+			f, err := os.Create(absDestPath)
 			if err != nil {
 				return err
 			}
