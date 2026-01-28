@@ -269,6 +269,16 @@ components:
           items:
             type: string
           type: array
+        resources:
+          description: Optional resource requests for this namespace
+          properties:
+            cpu:
+              type: string
+            memory:
+              type: string
+            storage:
+              type: string
+          type: object
       type: object
     getInfo_200_response:
       example:
