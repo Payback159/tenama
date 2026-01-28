@@ -1,1 +1,338 @@
-../../api/openapi.yaml
+openapi: 3.1.0
+info:
+  contact:
+    url: https://github.com/Payback159/tenama/issues/new
+  description:
+    "Tenama provides a simple REST API to enable non-cluster-admins to\
+    \ create temporary namespaces. tenama takes care of the creation, management and\
+    \ cleanup of the temporary namespaces."
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Tenama
+  version: 0.3.0
+servers:
+  - url: /
+tags:
+  - externalDocs:
+      description: Find out more
+      url: https://github.com/Payback159/tenama
+    name: Documentation
+  - description: Everything about your temporarily namespaces
+    name: Namespaces
+paths:
+  /info:
+    get:
+      operationId: getInfo
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getInfo_200_response"
+          description: successful operation
+      summary: Returns information about the running tenama instance
+      tags:
+        - Documentation
+  /docs:
+    get:
+      operationId: getDocumentation
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                example: |-
+                  <html>
+                  <head>
+                  </head>
+                  <body>
+                  </body>
+                  </html>
+                type: string
+          description: successful operation
+      summary: Outputs the openAPI specification
+      tags:
+        - Documentation
+  /namespace:
+    get:
+      operationId: getNamespaces
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/getNamespaces_200_response"
+          description: successful operation
+        "500":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Error getting namespaces"}'
+                type: string
+          description: Internal Server Error
+      security:
+        - basicAuth: []
+      summary: Get all namespaces
+      tags:
+        - Namespaces
+    post:
+      operationId: createNamespace
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Namespace"
+        description: Namespace object that needs to be added to the cluster
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+          description: successful operation
+        "400":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Invalid input"}'
+                type: string
+          description: Bad Request - Invalid input
+        "401":
+          description: Authentication information is missing or invalid
+          headers:
+            WWW_Authenticate:
+              schema:
+                type: string
+        "409":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Namespace already exists"}'
+                type: string
+          description: Conflict - Namespace already exists
+        "429":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Global resource limits exceeded..."}'
+                type: string
+          description: Too Many Requests - Global resource limits exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Internal Server Error"}'
+                type: string
+          description: Internal Server Error
+      security:
+        - basicAuth: []
+      summary: Create a new namespace
+      tags:
+        - Namespaces
+      x-codegen-request-body-name: body
+  /namespace/{namespace}:
+    delete:
+      operationId: deleteNamespace
+      parameters:
+        - description: Namespace to delete
+          explode: false
+          in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+          style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Namespace successfully deleted"}'
+                type: string
+          description: successful operation
+        "400":
+          content: {}
+          description: Invalid Namespace supplied
+        "401":
+          description: Authentication information is missing or invalid
+          headers:
+            WWW_Authenticate:
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Forbidden"}'
+                type: string
+          description: The user is not authorized to perform this operation
+        "404":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Namespace not found"}'
+                type: string
+          description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Internal Server Error"}'
+                type: string
+          description: Internal Server Error
+      security:
+        - basicAuth: []
+      summary: Deletes a namespace
+      tags:
+        - Namespaces
+    get:
+      description: Returns a single namespace
+      operationId: getNamespace
+      parameters:
+        - description: name of namespace to return
+          explode: false
+          in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+          style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Namespace successfully found"}'
+                type: string
+          description: successful operation
+        "400":
+          content: {}
+          description: Invalid namespace supplied
+        "401":
+          description: Authentication information is missing or invalid
+          headers:
+            WWW_Authenticate:
+              schema:
+                type: string
+        "403":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Forbidden"}'
+                type: string
+          description: The user is not authorized to perform this operation
+        "404":
+          content: {}
+          description: Namespace not found
+        "500":
+          content:
+            application/json:
+              schema:
+                example: '{"message":"Internal Server Error"}'
+                type: string
+          description: Internal Server Error
+      security:
+        - basicAuth: []
+      summary: Get namespace by name
+      tags:
+        - Namespaces
+components:
+  responses:
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      headers:
+        WWW_Authenticate:
+          schema:
+            type: string
+  schemas:
+    Namespace:
+      example:
+        duration: 24h
+        infix: infix
+        suffix: suffix
+        users:
+          - firstname.lastname@example.com
+      properties:
+        infix:
+          type: string
+        suffix:
+          type: string
+        duration:
+          description:
+            How long should the namespace be preserved until it becomes
+            obsolete and is automatically cleaned up.
+          type: string
+        users:
+          description: A list of users to be authorized as editors in this namespace.
+          items:
+            type: string
+          type: array
+      type: object
+    getInfo_200_response:
+      example:
+        version: 0.3.0
+        buildDate: 2020-05-01T12:00:00Z
+        commit: 1234567890abcdef
+        globalLimits:
+          enabled: true
+          currentUsage:
+            cpu: "1000m"
+            memory: "2Gi"
+            storage: "5Gi"
+          limits:
+            cpu: "5000m"
+            memory: "10Gi"
+            storage: "50Gi"
+      properties:
+        buildDate:
+          type: string
+        commit:
+          type: string
+        version:
+          type: string
+        globalLimits:
+          $ref: "#/components/schemas/GlobalLimitsStatus"
+      type: object
+    GlobalLimitsStatus:
+      example:
+        enabled: true
+        currentUsage:
+          cpu: "1000m"
+          memory: "2Gi"
+          storage: "5Gi"
+        limits:
+          cpu: "5000m"
+          memory: "10Gi"
+          storage: "50Gi"
+      properties:
+        enabled:
+          type: boolean
+          description: Whether global resource limits are enabled
+        currentUsage:
+          type: object
+          description: Current resource usage across all managed namespaces
+          additionalProperties:
+            type: string
+        limits:
+          type: object
+          description: Configured global resource limits
+          additionalProperties:
+            type: string
+      type: object
+    getNamespaces_200_response:
+      example:
+        message: Namespace successfully found
+        namespaces: []
+      properties:
+        message:
+          type: string
+        namespaces:
+          items:
+            type: string
+          type: array
+  securitySchemes:
+    basicAuth:
+      scheme: basic
+      type: http
