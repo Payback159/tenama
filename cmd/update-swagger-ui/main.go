@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +25,10 @@ const (
 
 type Release struct {
 	TagName string `json:"tag_name"`
+}
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
 }
 
 func main() {
@@ -82,7 +87,7 @@ func copySpec() error {
 
 func getLatestTag() (string, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo)
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +130,7 @@ func downloadAndInstall(tag string) error {
 	url := fmt.Sprintf("https://github.com/%s/archive/refs/tags/%s.tar.gz", githubRepo, tag)
 	log.Printf("Downloading %s...", url)
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -144,6 +149,7 @@ func downloadAndInstall(tag string) error {
 
 	tr := tar.NewReader(gzr)
 
+	// Get absolute path of targetDir for secure cleaning
 	absTargetDir, err := filepath.Abs(targetDir)
 	if err != nil {
 		return err
@@ -174,16 +180,16 @@ func downloadAndInstall(tag string) error {
 				continue
 			}
 
+			// Security check: Zip Slip / Path Traversal
 			destPath := filepath.Join(targetDir, relPath)
 			absDestPath, err := filepath.Abs(destPath)
 			if err != nil {
 				return err
 			}
 
-			// Ensure that the destination path is within the target directory
-			prefix := absTargetDir + string(os.PathSeparator)
-			if !strings.HasPrefix(absDestPath+string(os.PathSeparator), prefix) {
-				return fmt.Errorf("invalid path in archive: %s", header.Name)
+			// Check if the destination is within the target directory
+			if !strings.HasPrefix(absDestPath, absTargetDir+string(os.PathSeparator)) {
+				return fmt.Errorf("illegal file path in archive: %s", header.Name)
 			}
 
 			// Create directory if needed (e.g. dist/foo/bar.js)
@@ -191,16 +197,23 @@ func downloadAndInstall(tag string) error {
 				return err
 			}
 
-			f, err := os.Create(absDestPath)
+			// Create file with closure to ensure Close() is called
+			err = func() error {
+				f, err := os.Create(absDestPath)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+
+				if _, err := io.Copy(f, tr); err != nil {
+					return err
+				}
+				return nil
+			}()
+
 			if err != nil {
 				return err
 			}
-
-			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
-				return err
-			}
-			f.Close()
 		}
 	}
 
@@ -217,8 +230,13 @@ func updateInitializer() error {
 		return err
 	}
 
+	oldContent := string(content)
 	// Replace the default URL with our local spec
-	newContent := strings.Replace(string(content), testSpecURL, localSpec, 1)
+	newContent := strings.Replace(oldContent, testSpecURL, localSpec, 1)
+
+	if oldContent == newContent {
+		return fmt.Errorf("could not replace spec URL in %s - content structure might have changed", path)
+	}
 
 	return os.WriteFile(path, []byte(newContent), 0644)
 }
